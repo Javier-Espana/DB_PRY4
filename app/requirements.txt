@@ -1,0 +1,7 @@
+streamlit
+psycopg2-binary
+pandas
+plotly
+openpyxl         # Para exportar a Excel (pandas lo usa internamente)
+xlsxwriter       # Alternativa para escribir Excel (más control de formatos)
+reportlab       # Para generar tablas y exportar como PDF
