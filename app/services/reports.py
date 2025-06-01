@@ -4,6 +4,10 @@ from utils.helpers import safe_divide
 from typing import Optional
 
 
+# TODO: Reescribir todos los métodos de reporte usando solo SQLAlchemy ORM.
+# Eliminar SQL crudo y usar consultas ORM sobre los modelos definidos en models.py
+
+
 def get_donaciones_por_campana(
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None,

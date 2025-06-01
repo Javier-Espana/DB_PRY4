@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, 
 from sqlalchemy.schema import CreateTable, CreateIndex
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from sqlalchemy.sql import text
+import os
 
 # Configuración inicial
 def generate_ddl():
@@ -318,19 +319,19 @@ def generate_ddl():
     ddl.extend(triggers)
     
     # Escribir a archivo
-    with open('DDL.sql', 'w', encoding='utf-8') as f:
+    os.makedirs("/database", exist_ok=True)
+    with open("/database/DDL.sql", "w", encoding="utf-8") as f:
         f.write('\n\n'.join(ddl))
     
-    print("Archivo DDL.sql generado exitosamente!")
+    print("Archivo DDL.sql generado en /database/DDL.sql")
 
 # Clase auxiliar para crear tipos ENUM
 class CreateType:
     def __init__(self, enum_type):
         self.enum_type = enum_type
-    
-    def compile(self, engine):
-        return f"CREATE TYPE {self.enum_type.name} AS ENUM ({', '.join(['\'{}\''.format(v) for v in self.enum_type.enums])});"
+    def __str__(self):
+        # Usar repr para evitar problemas de comillas
+        return f"CREATE TYPE {self.enum_type.name} AS ENUM ({', '.join([repr(v) for v in self.enum_type.enums])});"
 
 if __name__ == '__main__':
     generate_ddl()
-    

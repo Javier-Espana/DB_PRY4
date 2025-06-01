@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import create_engine, MetaData, Table, select
 from sqlalchemy.orm import sessionmaker
 import uuid
+import os
 
 # Configuración inicial
 fake = Faker('es_ES')  # Español con datos regionales
@@ -40,6 +41,7 @@ estadisticas_campana = metadata.tables['estadisticas_campana']
 insert_queries = []
 
 def generar_datos():
+    # Solo genera el archivo SQL de referencia, no inserta en la base real
     # 1. Organizaciones (10-15)
     org_ids = []
     for _ in range(random.randint(10, 15)):
@@ -321,14 +323,267 @@ def generar_datos():
     # 15. Estadísticas (generadas automáticamente por triggers)
 
     # Escribir a archivo
-    with open('Registros.sql', 'w', encoding='utf-8') as f:
-        f.write('-- Datos de prueba generados automáticamente\n')
-        f.write('-- Total de registros: ' + str(len(insert_queries)) + '\n\n')
-        f.write('BEGIN;\n\n')
-        f.write('\n'.join(insert_queries))
-        f.write('\n\nCOMMIT;\n')
+    os.makedirs("/database", exist_ok=True)
+    with open("/database/Registros.sql", "w", encoding="utf-8") as f:
+        for stmt in insert_queries:
+            f.write(stmt + "\n")
+    print(f"Archivo Registros.sql generado con {len(insert_queries)} sentencias INSERT en /database/Registros.sql!")
 
-    print(f"Archivo Registros.sql generado con {len(insert_queries)} sentencias INSERT!")
+def poblar_db_orm(session):
+    """
+    Pobla la base de datos usando SQLAlchemy ORM en vez de solo generar SQL.
+    Llama esta función después de generar los datos si quieres poblar la base real.
+    """
+    # Importar los modelos ORM
+    from models import Organizacion, Categoria, Sede, Campana, Actividad, Donante, PreferenciaContacto, Donacion, Voluntario, DisponibilidadVoluntario, Habilidad, Recurso, VoluntarioActividad, VoluntarioHabilidad
+    import random
+    
+    # 1. Organizaciones
+    organizaciones = []
+    for _ in range(random.randint(10, 15)):
+        org = Organizacion(
+            nombre=fake.company(),
+            descripcion=fake.paragraph(),
+            email=fake.company_email(),
+            telefono=fake.phone_number(),
+            direccion=fake.address().replace('\n', ', '),
+            sitio_web=fake.url(),
+            fecha_registro=fake.date_between(start_date='-5y', end_date='today'),
+            activa=random.choice([True, False])
+        )
+        session.add(org)
+        organizaciones.append(org)
+    session.commit()
+
+    # 2. Categorías
+    categorias_lista = ['Medio Ambiente', 'Educación', 'Salud', 'Animales', 'Derechos Humanos', 'Arte y Cultura', 'Desarrollo Comunitario']
+    categorias_objs = []
+    for cat in categorias_lista[:random.randint(5, 8)]:
+        c = Categoria(nombre=cat, descripcion=fake.sentence())
+        session.add(c)
+        categorias_objs.append(c)
+    session.commit()
+
+    # 3. Sedes
+    sedes = []
+    for org in organizaciones:
+        for _ in range(random.randint(3, 5)):
+            s = Sede(
+                nombre=fake.street_name() + " Office",
+                direccion=fake.address().replace('\n', ', '),
+                ciudad=fake.city(),
+                region=fake.state(),
+                codigo_postal=fake.postcode(),
+                telefono=fake.phone_number(),
+                email=fake.company_email(),
+                horario_apertura=fake.time(pattern="%H:%M:%S"),
+                horario_cierre=fake.time(pattern="%H:%M:%S")
+            )
+            session.add(s)
+            sedes.append(s)
+    session.commit()
+
+    # 4. Campañas
+    campanas = []
+    estados = ['planificada', 'activa', 'pausada', 'finalizada']
+    for org in organizaciones:
+        for _ in range(random.randint(3, 8)):
+            fecha_inicio = fake.date_between(start_date='-1y', end_date='+1y')
+            fecha_fin = fecha_inicio + timedelta(days=random.randint(30, 180)) if random.random() > 0.3 else None
+            camp = Campana(
+                organizacion_id=org.organizacion_id,
+                categoria_id=random.choice(categorias_objs).categoria_id if random.random() > 0.2 else None,
+                sede_principal_id=random.choice(sedes).sede_id if random.random() > 0.3 else None,
+                nombre=fake.catch_phrase(),
+                descripcion='\n'.join(fake.paragraphs(2)),
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                meta_monetaria=round(random.uniform(1000, 50000), 2),
+                estado=random.choice(estados)
+            )
+            session.add(camp)
+            campanas.append(camp)
+    session.commit()
+
+    # 5. Actividades
+    actividades = []
+    for camp in campanas:
+        for _ in range(random.randint(5, 15)):
+            fecha_inicio = fake.date_time_between(start_date='-1y', end_date='+1y')
+            fecha_fin = fecha_inicio + timedelta(hours=random.randint(2, 8))
+            act = Actividad(
+                campana_id=camp.campana_id,
+                sede_id=random.choice(sedes).sede_id if random.random() > 0.2 else None,
+                nombre=fake.bs(),
+                descripcion=fake.paragraph(),
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                capacidad_max=random.randint(10, 100)
+            )
+            session.add(act)
+            actividades.append(act)
+    session.commit()
+
+    # 6. Donantes
+    donantes = []
+    for _ in range(random.randint(100, 150)):
+        d = Donante(
+            tipo='individual',
+            nombre=fake.first_name(),
+            apellido=fake.last_name(),
+            empresa=None,
+            email=fake.email(),
+            telefono=fake.phone_number(),
+            direccion=fake.address().replace('\n', ', '),
+            fecha_registro=fake.date_between(start_date='-3y', end_date='today')
+        )
+        session.add(d)
+        donantes.append(d)
+    for _ in range(random.randint(30, 50)):
+        d = Donante(
+            tipo='empresa',
+            nombre=None,
+            apellido=None,
+            empresa=fake.company(),
+            email=fake.company_email(),
+            telefono=fake.phone_number(),
+            direccion=fake.address().replace('\n', ', '),
+            fecha_registro=fake.date_between(start_date='-3y', end_date='today')
+        )
+        session.add(d)
+        donantes.append(d)
+    session.commit()
+
+    # 7. Preferencias de contacto
+    tipos_contacto = ['email', 'teléfono', 'correo', 'sms', 'whatsapp']
+    for d in donantes:
+        for _ in range(random.randint(2, 5)):
+            pc = PreferenciaContacto(
+                donante_id=d.donante_id,
+                tipo=random.choice(tipos_contacto),
+                permitido=random.choice([True, False])
+            )
+            session.add(pc)
+    session.commit()
+
+    # 8. Donaciones
+    for d in donantes:
+        for _ in range(random.randint(5, 20)):
+            tipo = random.choice(['monetaria', 'especie'])
+            camp = random.choice(campanas)
+            if tipo == 'monetaria':
+                monto = round(random.uniform(10, 5000), 2)
+                desc_especie = None
+            else:
+                monto = None
+                desc_especie = fake.sentence()
+            don = Donacion(
+                donante_id=d.donante_id,
+                campana_id=camp.campana_id,
+                tipo=tipo,
+                monto=monto,
+                descripcion_especie=desc_especie,
+                fecha=fake.date_time_between(start_date='-2y', end_date='now'),
+                anonima=random.choice([True, False]),
+                mensaje=fake.sentence() if random.random() > 0.7 else None
+            )
+            session.add(don)
+    session.commit()
+
+    # 9. Voluntarios
+    voluntarios = []
+    for _ in range(random.randint(50, 100)):
+        fecha_nac = fake.date_of_birth(minimum_age=16, maximum_age=80)
+        v = Voluntario(
+            nombre=fake.first_name(),
+            apellido=fake.last_name(),
+            email=fake.email(),
+            telefono=fake.phone_number(),
+            direccion=fake.address().replace('\n', ', '),
+            fecha_nacimiento=fecha_nac,
+            fecha_registro=fake.date_between(start_date=fecha_nac + timedelta(days=16*365), end_date='today'),
+            activo=random.choice([True, False])
+        )
+        session.add(v)
+        voluntarios.append(v)
+    session.commit()
+
+    # 10. Disponibilidad voluntarios
+    dias_semana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+    for v in voluntarios:
+        for _ in range(random.randint(2, 5)):
+            disp = DisponibilidadVoluntario(
+                voluntario_id=v.voluntario_id,
+                dia=random.choice(dias_semana),
+                hora_inicio=fake.time(pattern="%H:%M:%S"),
+                hora_fin=fake.time(pattern="%H:%M:%S")
+            )
+            session.add(disp)
+    session.commit()
+
+    # 11. Habilidades
+    habilidades_lista = [
+        'Idiomas', 'Primeros Auxilios', 'Carpintería', 'Programación',
+        'Diseño Gráfico', 'Enseñanza', 'Cocina', 'Jardinería',
+        'Construcción', 'Traducción', 'Música', 'Fotografía',
+        'Redes Sociales', 'Contabilidad', 'Medicina'
+    ]
+    habilidades_objs = []
+    for hab in habilidades_lista[:random.randint(10, 15)]:
+        h = Habilidad(
+            nombre=hab,
+            descripcion=fake.sentence(),
+            categoria=random.choice(categorias_objs).nombre
+        )
+        session.add(h)
+        habilidades_objs.append(h)
+    session.commit()
+
+    # 12. Voluntario-Habilidad
+    niveles = ['básico', 'intermedio', 'avanzado']
+    for v in voluntarios:
+        habilidades_vol = random.sample(habilidades_objs, k=random.randint(1, 4))
+        for h in habilidades_vol:
+            vh = VoluntarioHabilidad(
+                voluntario_id=v.voluntario_id,
+                habilidad_id=h.habilidad_id,
+                nivel=random.choice(niveles),
+                anios_experiencia=random.randint(0, 10),
+                certificado=random.choice([True, False])
+            )
+            session.add(vh)
+    session.commit()
+
+    # 13. Recursos
+    recursos_lista = ['Alimentos', 'Ropa', 'Medicinas', 'Material Escolar', 'Herramientas', 'Equipos Electrónicos', 'Libros']
+    for camp in campanas:
+        for _ in range(random.randint(3, 10)):
+            r = Recurso(
+                campana_id=camp.campana_id,
+                nombre=random.choice(recursos_lista),
+                descripcion=fake.sentence(),
+                cantidad_requerida=random.randint(10, 500),
+                cantidad_actual=random.randint(0, 500),
+                unidad_medida=random.choice(['kg', 'unidades', 'litros', 'paquetes', 'cajas'])
+            )
+            session.add(r)
+    session.commit()
+
+    # 14. Voluntario-Actividad
+    for act in actividades:
+        voluntarios_act = random.sample(voluntarios, k=random.randint(3, min(10, len(voluntarios))))
+        for v in voluntarios_act:
+            va = VoluntarioActividad(
+                voluntario_id=v.voluntario_id,
+                actividad_id=act.actividad_id,
+                horas_dedicadas=round(random.uniform(1, 20), 2),
+                comentarios=fake.sentence() if random.random() > 0.5 else None,
+                estado=random.choice(['pendiente', 'confirmado', 'completado', 'cancelado'])
+            )
+            session.add(va)
+    session.commit()
+
+    print("Base de datos poblada con datos de prueba usando ORM.")
 
 if __name__ == '__main__':
     generar_datos()
