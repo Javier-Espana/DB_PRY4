@@ -1,346 +1,71 @@
 from faker import Faker
 import random
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine, MetaData, Table, select
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Text, Boolean, Date, Time, Numeric, TIMESTAMP, Enum, ForeignKey
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
-import uuid
 import os
 
 # Configuración inicial
-fake = Faker('es_ES')  # Español con datos regionales
-Faker.seed(42)  # Para resultados reproducibles
+fake = Faker('es_ES')
+Faker.seed(42)
 random.seed(42)
 
-# Conexión a la base de datos (solo para ORM, no necesitamos una real)
-engine = create_engine('postgresql://user:password@localhost/dbname')
-metadata = MetaData()
-Session = sessionmaker(bind=engine)
-session = Session()
+# --- Modelos ORM locales (sin conexión a BD) ---
+Base = declarative_base()
 
-# Cargar las tablas (reflejar desde la base de datos)
-metadata.reflect(bind=engine)
+class Organizacion(Base):
+    __tablename__ = 'organizacion'
+    organizacion_id = Column(Integer, primary_key=True)
+    nombre = Column(String(100), nullable=False)
+    descripcion = Column(Text)
+    email = Column(String(100), nullable=False, unique=True)
+    telefono = Column(String(20))
+    direccion = Column(Text)
+    sitio_web = Column(String(100))
+    fecha_registro = Column(Date, nullable=False, server_default='CURRENT_DATE')
+    activa = Column(Boolean, server_default='TRUE')
 
-# Obtener referencias a todas las tablas
-organizacion = metadata.tables['organizacion']
-categoria = metadata.tables['categoria']
-sede = metadata.tables['sede']
-campana = metadata.tables['campana']
-actividad = metadata.tables['actividad']
-donante = metadata.tables['donante']
-preferencia_contacto = metadata.tables['preferencia_contacto']
-donacion = metadata.tables['donacion']
-voluntario = metadata.tables['voluntario']
-disponibilidad_voluntario = metadata.tables['disponibilidad_voluntario']
-habilidad = metadata.tables['habilidad']
-recurso = metadata.tables['recurso']
-voluntario_actividad = metadata.tables['voluntario_actividad']
-voluntario_habilidad = metadata.tables['voluntario_habilidad']
-estadisticas_campana = metadata.tables['estadisticas_campana']
+class Categoria(Base):
+    __tablename__ = 'categoria'
+    categoria_id = Column(Integer, primary_key=True)
+    nombre = Column(String(50), nullable=False, unique=True)
+    descripcion = Column(Text)
 
-# Lista para almacenar todas las sentencias SQL
-insert_queries = []
+class Sede(Base):
+    __tablename__ = 'sede'
+    sede_id = Column(Integer, primary_key=True)
+    nombre = Column(String(100), nullable=False)
+    direccion = Column(Text, nullable=False)
+    ciudad = Column(String(50), nullable=False)
+    region = Column(String(50))
+    codigo_postal = Column(String(10))
+    telefono = Column(String(20))
+    email = Column(String(100))
+    horario_apertura = Column(Time)
+    horario_cierre = Column(Time)
 
-def generar_datos():
-    # Solo genera el archivo SQL de referencia, no inserta en la base real
-    # 1. Organizaciones (10-15)
+class Campana(Base):
+    __tablename__ = 'campana'
+    campana_id = Column(Integer, primary_key=True)
+    nombre = Column(String(100), nullable=False)
+    descripcion = Column(Text)
+    fecha_inicio = Column(Date)
+    fecha_fin = Column(Date)
+    meta_monetaria = Column(Numeric)
+    estado = Column(String(20))
+    organizacion_id = Column(Integer)
+    categoria_id = Column(Integer)
+    sede_principal_id = Column(Integer)
+
+# --- Función para generar INSERTs desde modelos ORM ---
+def generar_inserts_sql():
+    inserts = []
+    total_registros = 0
+    # Organizaciones
     org_ids = []
-    for _ in range(random.randint(10, 15)):
-        org_data = {
-            'nombre': fake.company(),
-            'descripcion': fake.paragraph(),
-            'email': fake.company_email(),
-            'telefono': fake.phone_number(),
-            'direccion': fake.address().replace('\n', ', '),
-            'sitio_web': fake.url(),
-            'fecha_registro': fake.date_between(start_date='-5y', end_date='today'),
-            'activa': random.choice([True, False])
-        }
-        insert_queries.append(f"""
-        INSERT INTO organizacion (nombre, descripcion, email, telefono, direccion, sitio_web, fecha_registro, activa)
-        VALUES ('{org_data['nombre']}', '{org_data['descripcion']}', '{org_data['email']}', 
-                '{org_data['telefono']}', '{org_data['direccion']}', '{org_data['sitio_web']}', 
-                '{org_data['fecha_registro']}', {org_data['activa']});
-        """)
-        org_ids.append(f"(SELECT organizacion_id FROM organizacion WHERE email = '{org_data['email']}')")
-
-    # 2. Categorías (5-8)
-    cat_ids = []
-    categorias = ['Medio Ambiente', 'Educación', 'Salud', 'Animales', 'Derechos Humanos', 'Arte y Cultura', 'Desarrollo Comunitario']
-    for cat in categorias[:random.randint(5, 8)]:
-        insert_queries.append(f"""
-        INSERT INTO categoria (nombre, descripcion)
-        VALUES ('{cat}', '{fake.sentence()}');
-        """)
-        cat_ids.append(f"(SELECT categoria_id FROM categoria WHERE nombre = '{cat}')")
-
-    # 3. Sedes (3-5 por organización)
-    sede_ids = []
-    for org_id in org_ids:
-        for _ in range(random.randint(3, 5)):
-            sede_data = {
-                'nombre': fake.street_name() + " Office",
-                'direccion': fake.address().replace('\n', ', '),
-                'ciudad': fake.city(),
-                'region': fake.state(),
-                'codigo_postal': fake.postcode(),
-                'telefono': fake.phone_number(),
-                'email': fake.company_email(),
-                'horario_apertura': f"{random.randint(7, 9)}:00:00",
-                'horario_cierre': f"{random.randint(17, 21)}:00:00"
-            }
-            insert_queries.append(f"""
-            INSERT INTO sede (nombre, direccion, ciudad, region, codigo_postal, telefono, email, horario_apertura, horario_cierre)
-            VALUES ('{sede_data['nombre']}', '{sede_data['direccion']}', '{sede_data['ciudad']}', 
-                    '{sede_data['region']}', '{sede_data['codigo_postal']}', '{sede_data['telefono']}', 
-                    '{sede_data['email']}', '{sede_data['horario_apertura']}', '{sede_data['horario_cierre']}');
-            """)
-            sede_ids.append(f"(SELECT sede_id FROM sede WHERE email = '{sede_data['email']}')")
-
-    # 4. Campañas (3-8 por organización)
-    campana_ids = []
-    estados = ['planificada', 'activa', 'pausada', 'finalizada']
-    for org_id in org_ids:
-        for _ in range(random.randint(3, 8)):
-            fecha_inicio = fake.date_between(start_date='-1y', end_date='+1y')
-            fecha_fin = fecha_inicio + timedelta(days=random.randint(30, 180)) if random.random() > 0.3 else None
-            campana_data = {
-                'organizacion_id': org_id,
-                'categoria_id': random.choice(cat_ids) if random.random() > 0.2 else 'NULL',
-                'sede_principal_id': random.choice(sede_ids) if random.random() > 0.3 else 'NULL',
-                'nombre': fake.catch_phrase(),
-                'descripcion': '\n'.join(fake.paragraphs(2)),
-                'fecha_inicio': fecha_inicio,
-                'fecha_fin': fecha_fin,
-                'meta_monetaria': round(random.uniform(1000, 50000), 2),
-                'estado': random.choice(estados)
-            }
-            insert_queries.append(f"""
-            INSERT INTO campana (organizacion_id, categoria_id, sede_principal_id, nombre, descripcion, 
-                                fecha_inicio, fecha_fin, meta_monetaria, estado)
-            VALUES ({campana_data['organizacion_id']}, {campana_data['categoria_id']}, {campana_data['sede_principal_id']}, 
-                    '{campana_data['nombre']}', '{campana_data['descripcion']}', 
-                    '{campana_data['fecha_inicio']}', {f"'{campana_data['fecha_fin']}'" if campana_data['fecha_fin'] else 'NULL'}, 
-                    {campana_data['meta_monetaria']}, '{campana_data['estado']}');
-            """)
-            campana_ids.append(f"(SELECT campana_id FROM campana WHERE nombre = '{campana_data['nombre']}')")
-
-    # 5. Actividades (5-15 por campaña)
-    actividad_ids = []
-    for camp_id in campana_ids:
-        for _ in range(random.randint(5, 15)):
-            fecha_inicio = fake.date_time_between(start_date='-1y', end_date='+1y')
-            fecha_fin = fecha_inicio + timedelta(hours=random.randint(2, 8))
-            actividad_data = {
-                'campana_id': camp_id,
-                'sede_id': random.choice(sede_ids) if random.random() > 0.2 else 'NULL',
-                'nombre': fake.bs(),
-                'descripcion': fake.paragraph(),
-                'fecha_inicio': fecha_inicio,
-                'fecha_fin': fecha_fin,
-                'capacidad_max': random.randint(10, 100)
-            }
-            insert_queries.append(f"""
-            INSERT INTO actividad (campana_id, sede_id, nombre, descripcion, fecha_inicio, fecha_fin, capacidad_max)
-            VALUES ({actividad_data['campana_id']}, {actividad_data['sede_id']}, 
-                    '{actividad_data['nombre']}', '{actividad_data['descripcion']}', 
-                    '{actividad_data['fecha_inicio']}', '{actividad_data['fecha_fin']}', 
-                    {actividad_data['capacidad_max']});
-            """)
-            actividad_ids.append(f"(SELECT actividad_id FROM actividad WHERE nombre = '{actividad_data['nombre']}')")
-
-    # 6. Donantes (100-150 individuales, 30-50 empresas)
-    donante_ids = []
-    for _ in range(random.randint(100, 150)):
-        donante_data = {
-            'tipo': 'individual',
-            'nombre': fake.first_name(),
-            'apellido': fake.last_name(),
-            'empresa': 'NULL',
-            'email': fake.email(),
-            'telefono': fake.phone_number(),
-            'direccion': fake.address().replace('\n', ', '),
-            'fecha_registro': fake.date_between(start_date='-3y', end_date='today')
-        }
-        insert_queries.append(f"""
-        INSERT INTO donante (tipo, nombre, apellido, empresa, email, telefono, direccion, fecha_registro)
-        VALUES ('{donante_data['tipo']}', '{donante_data['nombre']}', '{donante_data['apellido']}', 
-                {donante_data['empresa']}, '{donante_data['email']}', '{donante_data['telefono']}', 
-                '{donante_data['direccion']}', '{donante_data['fecha_registro']}');
-        """)
-        donante_ids.append(f"(SELECT donante_id FROM donante WHERE email = '{donante_data['email']}')")
-
-    for _ in range(random.randint(30, 50)):
-        donante_data = {
-            'tipo': 'empresa',
-            'nombre': 'NULL',
-            'apellido': 'NULL',
-            'empresa': fake.company(),
-            'email': fake.company_email(),
-            'telefono': fake.phone_number(),
-            'direccion': fake.address().replace('\n', ', '),
-            'fecha_registro': fake.date_between(start_date='-3y', end_date='today')
-        }
-        insert_queries.append(f"""
-        INSERT INTO donante (tipo, nombre, apellido, empresa, email, telefono, direccion, fecha_registro)
-        VALUES ('{donante_data['tipo']}', {donante_data['nombre']}, {donante_data['apellido']}, 
-                '{donante_data['empresa']}', '{donante_data['email']}', '{donante_data['telefono']}', 
-                '{donante_data['direccion']}', '{donante_data['fecha_registro']}');
-        """)
-        donante_ids.append(f"(SELECT donante_id FROM donante WHERE email = '{donante_data['email']}')")
-
-    # 7. Preferencias de contacto (2-5 por donante)
-    tipos_contacto = ['email', 'teléfono', 'correo', 'sms', 'whatsapp']
-    for don_id in donante_ids:
-        for _ in range(random.randint(2, 5)):
-            tipo = random.choice(tipos_contacto)
-            permitido = random.choice([True, False])
-            insert_queries.append(f"""
-            INSERT INTO preferencia_contacto (donante_id, tipo, permitido)
-            VALUES ({don_id}, '{tipo}', {permitido});
-            """)
-
-    # 8. Donaciones (5-20 por donante)
-    for don_id in donante_ids:
-        for _ in range(random.randint(5, 20)):
-            tipo = random.choice(['monetaria', 'especie'])
-            camp_id = random.choice(campana_ids)
-            if tipo == 'monetaria':
-                monto = round(random.uniform(10, 5000), 2)
-                desc_especie = 'NULL'
-            else:
-                monto = 'NULL'
-                desc_especie = f"'{fake.sentence()}'"
-            
-            donacion_data = {
-                'donante_id': don_id,
-                'campana_id': camp_id,
-                'tipo': tipo,
-                'monto': monto,
-                'descripcion_especie': desc_especie,
-                'fecha': fake.date_time_between(start_date='-2y', end_date='now'),
-                'anonima': random.choice([True, False]),
-                'mensaje': fake.sentence() if random.random() > 0.7 else 'NULL'
-            }
-            insert_queries.append(f"""
-            INSERT INTO donacion (donante_id, campana_id, tipo, monto, descripcion_especie, fecha, anonima, mensaje)
-            VALUES ({donacion_data['donante_id']}, {donacion_data['campana_id']}, '{donacion_data['tipo']}', 
-                    {donacion_data['monto']}, {donacion_data['descripcion_especie']}, 
-                    '{donacion_data['fecha']}', {donacion_data['anonima']}, 
-                    {f"'{donacion_data['mensaje']}'" if donacion_data['mensaje'] != 'NULL' else 'NULL'});
-            """)
-
-    # 9. Voluntarios (50-100)
-    voluntario_ids = []
-    for _ in range(random.randint(50, 100)):
-        fecha_nac = fake.date_of_birth(minimum_age=16, maximum_age=80)
-        voluntario_data = {
-            'nombre': fake.first_name(),
-            'apellido': fake.last_name(),
-            'email': fake.email(),
-            'telefono': fake.phone_number(),
-            'direccion': fake.address().replace('\n', ', '),
-            'fecha_nacimiento': fecha_nac,
-            'fecha_registro': fake.date_between(start_date=fecha_nac + timedelta(days=16*365), end_date='today'),
-            'activo': random.choice([True, False])
-        }
-        insert_queries.append(f"""
-        INSERT INTO voluntario (nombre, apellido, email, telefono, direccion, fecha_nacimiento, fecha_registro, activo)
-        VALUES ('{voluntario_data['nombre']}', '{voluntario_data['apellido']}', 
-                '{voluntario_data['email']}', '{voluntario_data['telefono']}', 
-                '{voluntario_data['direccion']}', '{voluntario_data['fecha_nacimiento']}', 
-                '{voluntario_data['fecha_registro']}', {voluntario_data['activo']});
-        """)
-        voluntario_ids.append(f"(SELECT voluntario_id FROM voluntario WHERE email = '{voluntario_data['email']}')")
-
-    # 10. Disponibilidad voluntarios (2-5 por voluntario)
-    dias_semana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
-    for vol_id in voluntario_ids:
-        for _ in range(random.randint(2, 5)):
-            dia = random.choice(dias_semana)
-            hora_inicio = f"{random.randint(8, 12)}:00:00"
-            hora_fin = f"{random.randint(13, 20)}:00:00"
-            insert_queries.append(f"""
-            INSERT INTO disponibilidad_voluntario (voluntario_id, dia, hora_inicio, hora_fin)
-            VALUES ({vol_id}, '{dia}', '{hora_inicio}', '{hora_fin}');
-            """)
-
-    # 11. Habilidades (10-15)
-    habilidad_ids = []
-    habilidades = [
-        'Idiomas', 'Primeros Auxilios', 'Carpintería', 'Programación',
-        'Diseño Gráfico', 'Enseñanza', 'Cocina', 'Jardinería',
-        'Construcción', 'Traducción', 'Música', 'Fotografía',
-        'Redes Sociales', 'Contabilidad', 'Medicina'
-    ]
-    for hab in habilidades[:random.randint(10, 15)]:
-        insert_queries.append(f"""
-        INSERT INTO habilidad (nombre, descripcion, categoria)
-        VALUES ('{hab}', '{fake.sentence()}', '{random.choice(categorias[:len(cat_ids)])}');
-        """)
-        habilidad_ids.append(f"(SELECT habilidad_id FROM habilidad WHERE nombre = '{hab}')")
-
-    # 12. Voluntario-Habilidad (1-4 por voluntario)
-    niveles = ['básico', 'intermedio', 'avanzado']
-    for vol_id in voluntario_ids:
-        habilidades_vol = random.sample(habilidad_ids, k=random.randint(1, 4))
-        for hab_id in habilidades_vol:
-            insert_queries.append(f"""
-            INSERT INTO voluntario_habilidad (voluntario_id, habilidad_id, nivel, anios_experiencia, certificado)
-            VALUES ({vol_id}, {hab_id}, '{random.choice(niveles)}', 
-                    {random.randint(0, 10)}, {random.choice([True, False])});
-            """)
-
-    # 13. Recursos (3-10 por campaña)
-    recursos = ['Alimentos', 'Ropa', 'Medicinas', 'Material Escolar', 'Herramientas', 'Equipos Electrónicos', 'Libros']
-    for camp_id in campana_ids:
-        for _ in range(random.randint(3, 10)):
-            recurso_data = {
-                'campana_id': camp_id,
-                'nombre': random.choice(recursos),
-                'descripcion': fake.sentence(),
-                'cantidad_requerida': random.randint(10, 500),
-                'cantidad_actual': random.randint(0, 500),
-                'unidad_medida': random.choice(['kg', 'unidades', 'litros', 'paquetes', 'cajas'])
-            }
-            insert_queries.append(f"""
-            INSERT INTO recurso (campana_id, nombre, descripcion, cantidad_requerida, cantidad_actual, unidad_medida)
-            VALUES ({recurso_data['campana_id']}, '{recurso_data['nombre']}', '{recurso_data['descripcion']}', 
-                    {recurso_data['cantidad_requerida']}, {recurso_data['cantidad_actual']}, 
-                    '{recurso_data['unidad_medida']}');
-            """)
-
-    # 14. Voluntario-Actividad (3-10 por actividad)
-    for act_id in actividad_ids:
-        voluntarios_act = random.sample(voluntario_ids, k=random.randint(3, min(10, len(voluntario_ids))))
-        for vol_id in voluntarios_act:
-            insert_queries.append(f"""
-            INSERT INTO voluntario_actividad (voluntario_id, actividad_id, horas_dedicadas, comentarios, estado)
-            VALUES ({vol_id}, {act_id}, {round(random.uniform(1, 20), 2)}, 
-                    '{fake.sentence() if random.random() > 0.5 else 'NULL'}', 
-                    '{random.choice(['pendiente', 'confirmado', 'completado', 'cancelado'])}');
-            """)
-
-    # 15. Estadísticas (generadas automáticamente por triggers)
-
-    # Escribir a archivo
-    os.makedirs("/database", exist_ok=True)
-    with open("/database/Registros.sql", "w", encoding="utf-8") as f:
-        for stmt in insert_queries:
-            f.write(stmt + "\n")
-    print(f"Archivo Registros.sql generado con {len(insert_queries)} sentencias INSERT en /database/Registros.sql!")
-
-def poblar_db_orm(session):
-    """
-    Pobla la base de datos usando SQLAlchemy ORM en vez de solo generar SQL.
-    Llama esta función después de generar los datos si quieres poblar la base real.
-    """
-    # Importar los modelos ORM
-    from models import Organizacion, Categoria, Sede, Campana, Actividad, Donante, PreferenciaContacto, Donacion, Voluntario, DisponibilidadVoluntario, Habilidad, Recurso, VoluntarioActividad, VoluntarioHabilidad
-    import random
-    
-    # 1. Organizaciones
-    organizaciones = []
-    for _ in range(random.randint(10, 15)):
+    num_orgs = random.randint(20, 30)
+    for i in range(1, num_orgs+1):
         org = Organizacion(
             nombre=fake.company(),
             descripcion=fake.paragraph(),
@@ -351,239 +76,202 @@ def poblar_db_orm(session):
             fecha_registro=fake.date_between(start_date='-5y', end_date='today'),
             activa=random.choice([True, False])
         )
-        session.add(org)
-        organizaciones.append(org)
-    session.commit()
-
-    # 2. Categorías
-    categorias_lista = ['Medio Ambiente', 'Educación', 'Salud', 'Animales', 'Derechos Humanos', 'Arte y Cultura', 'Desarrollo Comunitario']
-    categorias_objs = []
-    for cat in categorias_lista[:random.randint(5, 8)]:
-        c = Categoria(nombre=cat, descripcion=fake.sentence())
-        session.add(c)
-        categorias_objs.append(c)
-    session.commit()
-
-    # 3. Sedes
-    sedes = []
-    for org in organizaciones:
-        for _ in range(random.randint(3, 5)):
-            s = Sede(
-                nombre=fake.street_name() + " Office",
-                direccion=fake.address().replace('\n', ', '),
-                ciudad=fake.city(),
-                region=fake.state(),
-                codigo_postal=fake.postcode(),
-                telefono=fake.phone_number(),
-                email=fake.company_email(),
-                horario_apertura=fake.time(pattern="%H:%M:%S"),
-                horario_cierre=fake.time(pattern="%H:%M:%S")
-            )
-            session.add(s)
-            sedes.append(s)
-    session.commit()
-
-    # 4. Campañas
-    campanas = []
-    estados = ['planificada', 'activa', 'pausada', 'finalizada']
-    for org in organizaciones:
-        for _ in range(random.randint(3, 8)):
-            fecha_inicio = fake.date_between(start_date='-1y', end_date='+1y')
-            fecha_fin = fecha_inicio + timedelta(days=random.randint(30, 180)) if random.random() > 0.3 else None
-            camp = Campana(
-                organizacion_id=org.organizacion_id,
-                categoria_id=random.choice(categorias_objs).categoria_id if random.random() > 0.2 else None,
-                sede_principal_id=random.choice(sedes).sede_id if random.random() > 0.3 else None,
-                nombre=fake.catch_phrase(),
-                descripcion='\n'.join(fake.paragraphs(2)),
-                fecha_inicio=fecha_inicio,
-                fecha_fin=fecha_fin,
-                meta_monetaria=round(random.uniform(1000, 50000), 2),
-                estado=random.choice(estados)
-            )
-            session.add(camp)
-            campanas.append(camp)
-    session.commit()
-
-    # 5. Actividades
-    actividades = []
-    for camp in campanas:
-        for _ in range(random.randint(5, 15)):
-            fecha_inicio = fake.date_time_between(start_date='-1y', end_date='+1y')
-            fecha_fin = fecha_inicio + timedelta(hours=random.randint(2, 8))
-            act = Actividad(
-                campana_id=camp.campana_id,
-                sede_id=random.choice(sedes).sede_id if random.random() > 0.2 else None,
-                nombre=fake.bs(),
-                descripcion=fake.paragraph(),
-                fecha_inicio=fecha_inicio,
-                fecha_fin=fecha_fin,
-                capacidad_max=random.randint(10, 100)
-            )
-            session.add(act)
-            actividades.append(act)
-    session.commit()
-
-    # 6. Donantes
-    donantes = []
-    for _ in range(random.randint(100, 150)):
-        d = Donante(
-            tipo='individual',
-            nombre=fake.first_name(),
-            apellido=fake.last_name(),
-            empresa=None,
-            email=fake.email(),
-            telefono=fake.phone_number(),
-            direccion=fake.address().replace('\n', ', '),
-            fecha_registro=fake.date_between(start_date='-3y', end_date='today')
+        inserts.append(
+            f"INSERT INTO organizacion (organizacion_id, nombre, descripcion, email, telefono, direccion, sitio_web, fecha_registro, activa) "
+            f"VALUES ({i}, '{org.nombre}', '{org.descripcion}', '{org.email}', '{org.telefono}', "
+            f"'{org.direccion}', '{org.sitio_web}', '{org.fecha_registro}', {org.activa});"
         )
-        session.add(d)
-        donantes.append(d)
-    for _ in range(random.randint(30, 50)):
-        d = Donante(
-            tipo='empresa',
-            nombre=None,
-            apellido=None,
-            empresa=fake.company(),
-            email=fake.company_email(),
-            telefono=fake.phone_number(),
-            direccion=fake.address().replace('\n', ', '),
-            fecha_registro=fake.date_between(start_date='-3y', end_date='today')
-        )
-        session.add(d)
-        donantes.append(d)
-    session.commit()
-
-    # 7. Preferencias de contacto
-    tipos_contacto = ['email', 'teléfono', 'correo', 'sms', 'whatsapp']
-    for d in donantes:
-        for _ in range(random.randint(2, 5)):
-            pc = PreferenciaContacto(
-                donante_id=d.donante_id,
-                tipo=random.choice(tipos_contacto),
-                permitido=random.choice([True, False])
+        org_ids.append(i)
+        total_registros += 1
+    # Categorías (garantizar unicidad)
+    cat_ids = []
+    categorias = ['Medio Ambiente', 'Educación', 'Salud', 'Animales', 'Derechos Humanos', 'Arte y Cultura', 'Desarrollo Comunitario']
+    random.shuffle(categorias)
+    num_cats = min(random.randint(7, 10), len(categorias))
+    categorias_unicas = categorias[:num_cats]
+    for j, cat in enumerate(categorias_unicas, 1):
+        inserts.append(f"INSERT INTO categoria (categoria_id, nombre, descripcion) VALUES ({j}, '{cat}', '{fake.sentence()}');")
+        cat_ids.append(j)
+        total_registros += 1
+    # Sedes (5-10 por organización)
+    sede_ids = []
+    sede_id_counter = 1
+    for org_id in org_ids:
+        for _ in range(random.randint(5, 10)):
+            nombre = fake.company() + " Sede"
+            direccion = fake.address().replace('\n', ', ')
+            ciudad = fake.city()
+            region = fake.state()
+            codigo_postal = fake.postcode()
+            telefono = fake.phone_number()
+            email = fake.company_email()
+            horario_apertura = '08:00:00'
+            horario_cierre = '17:00:00'
+            inserts.append(
+                f"INSERT INTO sede (sede_id, nombre, direccion, ciudad, region, codigo_postal, telefono, email, horario_apertura, horario_cierre) "
+                f"VALUES ({sede_id_counter}, '{nombre}', '{direccion}', '{ciudad}', '{region}', '{codigo_postal}', '{telefono}', '{email}', '{horario_apertura}', '{horario_cierre}');"
             )
-            session.add(pc)
-    session.commit()
-
-    # 8. Donaciones
-    for d in donantes:
-        for _ in range(random.randint(5, 20)):
-            tipo = random.choice(['monetaria', 'especie'])
-            camp = random.choice(campanas)
-            if tipo == 'monetaria':
-                monto = round(random.uniform(10, 5000), 2)
-                desc_especie = None
-            else:
-                monto = None
-                desc_especie = fake.sentence()
-            don = Donacion(
-                donante_id=d.donante_id,
-                campana_id=camp.campana_id,
-                tipo=tipo,
-                monto=monto,
-                descripcion_especie=desc_especie,
-                fecha=fake.date_time_between(start_date='-2y', end_date='now'),
-                anonima=random.choice([True, False]),
-                mensaje=fake.sentence() if random.random() > 0.7 else None
+            sede_ids.append(sede_id_counter)
+            sede_id_counter += 1
+            total_registros += 1
+    # Campañas (10-20 por organización)
+    campana_id_counter = 1
+    for org_id in org_ids:
+        for _ in range(random.randint(10, 20)):
+            nombre = fake.catch_phrase()
+            descripcion = fake.paragraph()
+            fecha_inicio = fake.date_between(start_date='-3y', end_date='today')
+            fecha_fin = fecha_inicio + timedelta(days=random.randint(30, 180))
+            meta_monetaria = random.randint(1000, 10000)
+            estado = random.choice(['planificada', 'activa', 'pausada', 'finalizada'])
+            categoria_id = random.choice(cat_ids)
+            sede_principal_id = random.choice(sede_ids)
+            inserts.append(
+                f"INSERT INTO campana (campana_id, nombre, descripcion, fecha_inicio, fecha_fin, meta_monetaria, estado, organizacion_id, categoria_id, sede_principal_id) "
+                f"VALUES ({campana_id_counter}, '{nombre}', '{descripcion}', '{fecha_inicio}', '{fecha_fin}', {meta_monetaria}, '{estado}', {org_id}, {categoria_id}, {sede_principal_id});"
             )
-            session.add(don)
-    session.commit()
-
-    # 9. Voluntarios
-    voluntarios = []
-    for _ in range(random.randint(50, 100)):
-        fecha_nac = fake.date_of_birth(minimum_age=16, maximum_age=80)
-        v = Voluntario(
-            nombre=fake.first_name(),
-            apellido=fake.last_name(),
-            email=fake.email(),
-            telefono=fake.phone_number(),
-            direccion=fake.address().replace('\n', ', '),
-            fecha_nacimiento=fecha_nac,
-            fecha_registro=fake.date_between(start_date=fecha_nac + timedelta(days=16*365), end_date='today'),
-            activo=random.choice([True, False])
+            campana_id_counter += 1
+            total_registros += 1
+    # Donantes (200-300 individuales, 80-120 empresas)
+    donante_id_counter = 1
+    for _ in range(random.randint(200, 300)):
+        nombre = fake.first_name()
+        apellido = fake.last_name()
+        email = fake.email()
+        tipo = 'individual'
+        inserts.append(
+            f"INSERT INTO donante (donante_id, tipo, nombre, apellido, email) VALUES ({donante_id_counter}, '{tipo}', '{nombre}', '{apellido}', '{email}');"
         )
-        session.add(v)
-        voluntarios.append(v)
-    session.commit()
-
-    # 10. Disponibilidad voluntarios
+        donante_id_counter += 1
+        total_registros += 1
+    for _ in range(random.randint(80, 120)):
+        empresa = fake.company()
+        email = fake.company_email()
+        tipo = 'empresa'
+        inserts.append(
+            f"INSERT INTO donante (donante_id, tipo, empresa, email) VALUES ({donante_id_counter}, '{tipo}', '{empresa}', '{email}');"
+        )
+        donante_id_counter += 1
+        total_registros += 1
+    # Voluntarios (200-300)
+    voluntario_id_counter = 1
+    for _ in range(random.randint(200, 300)):
+        nombre = fake.first_name()
+        apellido = fake.last_name()
+        email = fake.email()
+        fecha_nacimiento = fake.date_of_birth(minimum_age=18, maximum_age=65)
+        inserts.append(
+            f"INSERT INTO voluntario (voluntario_id, nombre, apellido, email, fecha_nacimiento) VALUES ({voluntario_id_counter}, '{nombre}', '{apellido}', '{email}', '{fecha_nacimiento}');"
+        )
+        voluntario_id_counter += 1
+        total_registros += 1
+    # Donaciones (600-900)
+    donacion_id_counter = 1
+    for _ in range(random.randint(600, 900)):
+        campana_id = random.randint(1, campana_id_counter-1)
+        donante_id = random.randint(1, donante_id_counter-1)
+        tipo = random.choice(['monetaria', 'especie'])
+        if tipo == 'monetaria':
+            monto = round(random.uniform(10, 1000), 2)
+            descripcion_especie = 'NULL'
+        else:
+            monto = 'NULL'
+            desc = f"{fake.word().capitalize()} {fake.word()} {fake.word()}".replace("'", "''")
+            descripcion_especie = f"'{desc}'"
+        fecha = fake.date_between(start_date='-2y', end_date='today')
+        # Asegurar que el campo tipo siempre esté presente en el insert
+        inserts.append(
+            f"INSERT INTO donacion (donacion_id, campana_id, donante_id, tipo, monto, descripcion_especie, fecha) VALUES ({donacion_id_counter}, {campana_id}, {donante_id}, '{tipo}', {monto}, {descripcion_especie}, '{fecha}');"
+        )
+        donacion_id_counter += 1
+        total_registros += 1
+    # Habilidad (10-20)
+    habilidad_id_counter = 1
+    habilidades = ['Liderazgo', 'Comunicación', 'Organización', 'Trabajo en equipo', 'Gestión de proyectos', 'Creatividad', 'Resolución de problemas', 'Empatía', 'Negociación', 'Planificación', 'Análisis', 'Adaptabilidad']
+    for nombre in habilidades[:random.randint(10, 12)]:
+        inserts.append(
+            f"INSERT INTO habilidad (habilidad_id, nombre) VALUES ({habilidad_id_counter}, '{nombre}');"
+        )
+        habilidad_id_counter += 1
+        total_registros += 1
+    # Recurso (100-200)
+    recurso_id_counter = 1
+    for _ in range(random.randint(100, 200)):
+        campana_id = random.randint(1, campana_id_counter-1)
+        nombre = fake.word().capitalize()
+        cantidad = random.randint(1, 100)
+        inserts.append(
+            f"INSERT INTO recurso (recurso_id, campana_id, nombre, cantidad) VALUES ({recurso_id_counter}, {campana_id}, '{nombre}', {cantidad});"
+        )
+        recurso_id_counter += 1
+        total_registros += 1
+    # Actividad (200-400)
+    actividad_id_counter = 1
+    for campana_id in range(1, campana_id_counter):
+        for _ in range(random.randint(2, 4)):
+            nombre = fake.bs().capitalize()
+            sede_id = random.choice(sede_ids)
+            fecha_inicio = fake.date_between(start_date='-2y', end_date='today')
+            fecha_fin = fecha_inicio + timedelta(days=random.randint(1, 10))
+            inserts.append(
+                f"INSERT INTO actividad (actividad_id, campana_id, nombre, sede_id, fecha_inicio, fecha_fin) VALUES ({actividad_id_counter}, {campana_id}, '{nombre}', {sede_id}, '{fecha_inicio}', '{fecha_fin}');"
+            )
+            actividad_id_counter += 1
+            total_registros += 1
+    # Voluntario_Actividad (300-600)
+    for voluntario_id in range(1, voluntario_id_counter):
+        for _ in range(random.randint(1, 2)):
+            actividad_id = random.randint(1, actividad_id_counter-1)
+            inserts.append(
+                f"INSERT INTO voluntario_actividad (voluntario_id, actividad_id) VALUES ({voluntario_id}, {actividad_id});"
+            )
+            total_registros += 1
+    # Voluntario_Habilidad (300-600)
+    for voluntario_id in range(1, voluntario_id_counter):
+        habilidades_asignadas = random.sample(range(1, habilidad_id_counter), random.randint(1, 2))
+        for habilidad_id in habilidades_asignadas:
+            inserts.append(
+                f"INSERT INTO voluntario_habilidad (voluntario_id, habilidad_id) VALUES ({voluntario_id}, {habilidad_id});"
+            )
+            total_registros += 1
+    # Disponibilidad_Voluntario (300-600)
+    disponibilidad_id_counter = 1
     dias_semana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
-    for v in voluntarios:
-        for _ in range(random.randint(2, 5)):
-            disp = DisponibilidadVoluntario(
-                voluntario_id=v.voluntario_id,
-                dia=random.choice(dias_semana),
-                hora_inicio=fake.time(pattern="%H:%M:%S"),
-                hora_fin=fake.time(pattern="%H:%M:%S")
+    for voluntario_id in range(1, voluntario_id_counter):
+        for _ in range(random.randint(1, 2)):
+            dia = random.choice(dias_semana)
+            hora_inicio = f"{random.randint(7, 12)}:00:00"
+            hora_fin = f"{random.randint(13, 20)}:00:00"
+            inserts.append(
+                f"INSERT INTO disponibilidad_voluntario (disponibilidad_id, voluntario_id, dia, hora_inicio, hora_fin) VALUES ({disponibilidad_id_counter}, {voluntario_id}, '{dia}', '{hora_inicio}', '{hora_fin}');"
             )
-            session.add(disp)
-    session.commit()
-
-    # 11. Habilidades
-    habilidades_lista = [
-        'Idiomas', 'Primeros Auxilios', 'Carpintería', 'Programación',
-        'Diseño Gráfico', 'Enseñanza', 'Cocina', 'Jardinería',
-        'Construcción', 'Traducción', 'Música', 'Fotografía',
-        'Redes Sociales', 'Contabilidad', 'Medicina'
-    ]
-    habilidades_objs = []
-    for hab in habilidades_lista[:random.randint(10, 15)]:
-        h = Habilidad(
-            nombre=hab,
-            descripcion=fake.sentence(),
-            categoria=random.choice(categorias_objs).nombre
+            disponibilidad_id_counter += 1
+            total_registros += 1
+    # Preferencia_Contacto (200-400)
+    preferencia_id_counter = 1
+    tipos_contacto = ['email', 'teléfono', 'correo', 'sms', 'whatsapp']
+    for donante_id in range(1, donante_id_counter):
+        tipo = random.choice(tipos_contacto)
+        valor = fake.phone_number() if tipo != 'email' else fake.email()
+        inserts.append(
+            f"INSERT INTO preferencia_contacto (preferencia_id, donante_id, tipo, valor) VALUES ({preferencia_id_counter}, {donante_id}, '{tipo}', '{valor}');"
         )
-        session.add(h)
-        habilidades_objs.append(h)
-    session.commit()
-
-    # 12. Voluntario-Habilidad
-    niveles = ['básico', 'intermedio', 'avanzado']
-    for v in voluntarios:
-        habilidades_vol = random.sample(habilidades_objs, k=random.randint(1, 4))
-        for h in habilidades_vol:
-            vh = VoluntarioHabilidad(
-                voluntario_id=v.voluntario_id,
-                habilidad_id=h.habilidad_id,
-                nivel=random.choice(niveles),
-                anios_experiencia=random.randint(0, 10),
-                certificado=random.choice([True, False])
-            )
-            session.add(vh)
-    session.commit()
-
-    # 13. Recursos
-    recursos_lista = ['Alimentos', 'Ropa', 'Medicinas', 'Material Escolar', 'Herramientas', 'Equipos Electrónicos', 'Libros']
-    for camp in campanas:
-        for _ in range(random.randint(3, 10)):
-            r = Recurso(
-                campana_id=camp.campana_id,
-                nombre=random.choice(recursos_lista),
-                descripcion=fake.sentence(),
-                cantidad_requerida=random.randint(10, 500),
-                cantidad_actual=random.randint(0, 500),
-                unidad_medida=random.choice(['kg', 'unidades', 'litros', 'paquetes', 'cajas'])
-            )
-            session.add(r)
-    session.commit()
-
-    # 14. Voluntario-Actividad
-    for act in actividades:
-        voluntarios_act = random.sample(voluntarios, k=random.randint(3, min(10, len(voluntarios))))
-        for v in voluntarios_act:
-            va = VoluntarioActividad(
-                voluntario_id=v.voluntario_id,
-                actividad_id=act.actividad_id,
-                horas_dedicadas=round(random.uniform(1, 20), 2),
-                comentarios=fake.sentence() if random.random() > 0.5 else None,
-                estado=random.choice(['pendiente', 'confirmado', 'completado', 'cancelado'])
-            )
-            session.add(va)
-    session.commit()
-
-    print("Base de datos poblada con datos de prueba usando ORM.")
+        preferencia_id_counter += 1
+        total_registros += 1
+    # Estadisticas_Campana (1 por campaña)
+    for campana_id in range(1, campana_id_counter):
+        total_donaciones = random.randint(0, 100)
+        monto_total = round(random.uniform(0, 10000), 2)
+        inserts.append(
+            f"INSERT INTO estadisticas_campana (campana_id, total_donaciones, monto_total) VALUES ({campana_id}, {total_donaciones}, {monto_total});"
+        )
+        total_registros += 1
+    # Escribir archivo
+    os.makedirs("/database", exist_ok=True)
+    with open("/database/Registros.sql", "w", encoding="utf-8") as f:
+        f.write("-- Datos generados automáticamente con ORM (sin conexión a BD)\n")
+        f.write("\n".join(inserts))
+    print(f"Archivo Registros.sql generado con {len(inserts)} INSERTs y {total_registros} registros distribuidos.")
 
 if __name__ == '__main__':
-    generar_datos()
+    generar_inserts_sql()

@@ -1,10 +1,16 @@
 version: '3.9'
 
 services:
+  initdb:
+    build: ./app/
+    command: /bin/sh -c "python db/ddl.py && python db/registros.py"
+    volumes:
+      - ./app:/app
+      - ./database:/database
+
   db:
     image: postgres:15
     container_name: ong_db
-    restart: unless-stopped
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin_password
@@ -13,11 +19,14 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    depends_on:
+      - initdb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d reporteria_db"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   backend:
     build:
@@ -37,8 +46,8 @@ services:
       - "8501:8501"
     volumes:
       - ./app:/app
-      - ./database:/database
-    entrypoint: ["/app/entrypoint.sh"]
+    command: streamlit run main.py --server.port=8501 --server.address=0.0.0.0
 
 volumes:
   db_data:
+

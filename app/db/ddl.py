@@ -1,12 +1,10 @@
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Text, Boolean, Date, Time, Numeric, TIMESTAMP, Enum, ForeignKey, CheckConstraint, UniqueConstraint
-from sqlalchemy.schema import CreateTable, CreateIndex
+from sqlalchemy.schema import CreateTable
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from sqlalchemy.sql import text
 import os
 
-# Configuración inicial
 def generate_ddl():
-    # Crear motor (no necesitamos una conexión real, solo para generar SQL)
     engine = create_engine('postgresql://user:password@localhost/dbname')
     metadata = MetaData()
 
@@ -18,7 +16,7 @@ def generate_ddl():
     tipo_contacto = PG_ENUM('email', 'teléfono', 'correo', 'sms', 'whatsapp', name='tipo_contacto')
     dia_semana = PG_ENUM('lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo', name='dia_semana')
 
-    # Definir tablas
+    # Definir tablas (completas, fieles a models.py)
     organizacion = Table('organizacion', metadata,
         Column('organizacion_id', Integer, primary_key=True, autoincrement=True),
         Column('nombre', String(100), nullable=False),
@@ -192,128 +190,136 @@ def generate_ddl():
     
     # Agregar tipos ENUM primero
     for enum in [estado_campana, tipo_donante, tipo_donacion, nivel_habilidad, tipo_contacto, dia_semana]:
-        ddl.append(str(CreateType(enum).compile(engine)))
+        ddl.append(f"CREATE TYPE {enum.name} AS ENUM ({', '.join([repr(v) for v in enum.enums])});")
     
-    # Agregar tablas
+    # Agregar separador antes de las tablas
+    ddl.append("\n--tablas")
+    
+    # Agregar tablas con formato mejorado
     for table in metadata.sorted_tables:
-        ddl.append(str(CreateTable(table).compile(engine)))
+        create_table = str(CreateTable(table).compile(engine))
+        # Reemplazar NUMERIC por DECIMAL para coincidir con tu ejemplo
+        create_table = create_table.replace("NUMERIC", "DECIMAL")
+        # Reemplazar REFERENCES por REFERENCES para mantener consistencia
+        create_table = create_table.replace("FOREIGN KEY(", "").replace(") REFERENCES ", " REFERENCES ")
+        # Ajustar formato general
+        create_table = create_table.replace(",\n    ", ",\n    ")
+        ddl.append(create_table)
     
-    # Agregar triggers (como texto directamente ya que SQLAlchemy no los soporta directamente)
+    # Agregar triggers
     triggers = [
         """
-        CREATE OR REPLACE FUNCTION actualizar_estadisticas_donacion()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            IF NEW.tipo = 'monetaria' THEN
-                UPDATE estadisticas_campana
-                SET monto_recaudado = monto_recaudado + NEW.monto,
-                    num_donaciones = num_donaciones + 1,
-                    porcentaje_meta = (
-                        SELECT CASE WHEN meta_monetaria > 0 
-                               THEN ((monto_recaudado + NEW.monto) / meta_monetaria) * 100
-                               ELSE 0 
-                               END
-                        FROM campana WHERE campana_id = NEW.campana_id
-                    ),
-                    ultima_actualizacion = CURRENT_TIMESTAMP
-                WHERE campana_id = NEW.campana_id;
-            ELSE
-                UPDATE estadisticas_campana
-                SET num_donaciones = num_donaciones + 1,
-                    ultima_actualizacion = CURRENT_TIMESTAMP
-                WHERE campana_id = NEW.campana_id;
-            END IF;
-            
-            IF NOT FOUND THEN
-                INSERT INTO estadisticas_campana (
-                    campana_id, 
-                    monto_recaudado, 
-                    porcentaje_meta,
-                    num_donaciones
-                ) VALUES (
-                    NEW.campana_id, 
-                    CASE WHEN NEW.tipo = 'monetaria' THEN NEW.monto ELSE 0 END,
-                    (
-                        SELECT CASE WHEN meta_monetaria > 0 
-                               THEN (CASE WHEN NEW.tipo = 'monetaria' THEN NEW.monto ELSE 0 END / meta_monetaria) * 100
-                               ELSE 0 
-                               END
-                        FROM campana WHERE campana_id = NEW.campana_id
-                    ),
-                    1
-                );
-            END IF;
-            
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
+--TRIGGERS
+CREATE OR REPLACE FUNCTION actualizar_estadisticas_donacion()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.tipo = 'monetaria' THEN
+        UPDATE estadisticas_campana
+        SET monto_recaudado = monto_recaudado + NEW.monto,
+            num_donaciones = num_donaciones + 1,
+            porcentaje_meta = (
+                SELECT CASE WHEN meta_monetaria > 0 
+                       THEN ((monto_recaudado + NEW.monto) / meta_monetaria) * 100
+                       ELSE 0 
+                       END
+                FROM campana WHERE campana_id = NEW.campana_id
+            ),
+            ultima_actualizacion = CURRENT_TIMESTAMP
+        WHERE campana_id = NEW.campana_id;
+    ELSE
+        UPDATE estadisticas_campana
+        SET num_donaciones = num_donaciones + 1,
+            ultima_actualizacion = CURRENT_TIMESTAMP
+        WHERE campana_id = NEW.campana_id;
+    END IF;
+    
+    IF NOT FOUND THEN
+        INSERT INTO estadisticas_campana (
+            campana_id, 
+            monto_recaudado, 
+            porcentaje_meta,
+            num_donaciones
+        ) VALUES (
+            NEW.campana_id, 
+            CASE WHEN NEW.tipo = 'monetaria' THEN NEW.monto ELSE 0 END,
+            (
+                SELECT CASE WHEN meta_monetaria > 0 
+                       THEN (CASE WHEN NEW.tipo = 'monetaria' THEN NEW.monto ELSE 0 END / meta_monetaria) * 100
+                       ELSE 0 
+                       END
+                FROM campana WHERE campana_id = NEW.campana_id
+            ),
+            1
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER after_donacion_insert
-        AFTER INSERT ON donacion
-        FOR EACH ROW
-        EXECUTE FUNCTION actualizar_estadisticas_donacion();
-        """,
+CREATE TRIGGER after_donacion_insert
+AFTER INSERT ON donacion
+FOR EACH ROW
+EXECUTE FUNCTION actualizar_estadisticas_donacion();""",
         """
-        CREATE OR REPLACE FUNCTION actualizar_estadisticas_voluntario()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            UPDATE estadisticas_campana
-            SET num_voluntarios = (
-                    SELECT COUNT(DISTINCT va.voluntario_id) 
-                    FROM voluntario_actividad va
-                    JOIN actividad a ON va.actividad_id = a.actividad_id
-                    WHERE a.campana_id = (
-                        SELECT campana_id FROM actividad WHERE actividad_id = NEW.actividad_id
-                    )
-                ),
-                ultima_actualizacion = CURRENT_TIMESTAMP
-            WHERE campana_id = (
+CREATE OR REPLACE FUNCTION actualizar_estadisticas_voluntario()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE estadisticas_campana
+    SET num_voluntarios = (
+            SELECT COUNT(DISTINCT va.voluntario_id) 
+            FROM voluntario_actividad va
+            JOIN actividad a ON va.actividad_id = a.actividad_id
+            WHERE a.campana_id = (
                 SELECT campana_id FROM actividad WHERE actividad_id = NEW.actividad_id
-            );
-            
-            IF NOT FOUND THEN
-                INSERT INTO estadisticas_campana (
-                    campana_id,
-                    num_voluntarios
-                ) VALUES (
-                    (SELECT campana_id FROM actividad WHERE actividad_id = NEW.actividad_id),
-                    1
-                );
-            END IF;
-            
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
+            )
+        ),
+        ultima_actualizacion = CURRENT_TIMESTAMP
+    WHERE campana_id = (
+        SELECT campana_id FROM actividad WHERE actividad_id = NEW.actividad_id
+    );
+    
+    IF NOT FOUND THEN
+        INSERT INTO estadisticas_campana (
+            campana_id,
+            num_voluntarios
+        ) VALUES (
+            (SELECT campana_id FROM actividad WHERE actividad_id = NEW.actividad_id),
+            1
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER after_voluntario_actividad_insert
-        AFTER INSERT ON voluntario_actividad
-        FOR EACH ROW
-        EXECUTE FUNCTION actualizar_estadisticas_voluntario();
-        """,
+CREATE TRIGGER after_voluntario_actividad_insert
+AFTER INSERT ON voluntario_actividad
+FOR EACH ROW
+EXECUTE FUNCTION actualizar_estadisticas_voluntario();""",
         """
-        CREATE OR REPLACE FUNCTION actualizar_estado_campana()
-        RETURNS TRIGGER AS $$
-        BEGIN
-            UPDATE campana
-            SET estado = 
-                CASE
-                    WHEN fecha_inicio > CURRENT_DATE THEN 'planificada'
-                    WHEN fecha_fin IS NULL AND fecha_inicio <= CURRENT_DATE THEN 'activa'
-                    WHEN fecha_fin <= CURRENT_DATE THEN 'finalizada'
-                    WHEN fecha_inicio <= CURRENT_DATE AND fecha_fin > CURRENT_DATE THEN 'activa'
-                    ELSE estado
-                END
-            WHERE campana_id = NEW.campana_id;
-            
-            RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION actualizar_estado_campana()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE campana
+    SET estado = 
+        CASE
+            WHEN fecha_inicio > CURRENT_DATE THEN 'planificada'
+            WHEN fecha_fin IS NULL AND fecha_inicio <= CURRENT_DATE THEN 'activa'
+            WHEN fecha_fin <= CURRENT_DATE THEN 'finalizada'
+            WHEN fecha_inicio <= CURRENT_DATE AND fecha_fin > CURRENT_DATE THEN 'activa'
+            ELSE estado
+        END
+    WHERE campana_id = NEW.campana_id;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-        CREATE TRIGGER after_campana_date_update
-        BEFORE INSERT OR UPDATE OF fecha_inicio, fecha_fin ON campana
-        FOR EACH ROW
-        EXECUTE FUNCTION actualizar_estado_campana();
-        """
+CREATE TRIGGER after_campana_date_update
+BEFORE INSERT OR UPDATE OF fecha_inicio, fecha_fin ON campana
+FOR EACH ROW
+EXECUTE FUNCTION actualizar_estado_campana();"""
     ]
     
     ddl.extend(triggers)
@@ -321,17 +327,10 @@ def generate_ddl():
     # Escribir a archivo
     os.makedirs("/database", exist_ok=True)
     with open("/database/DDL.sql", "w", encoding="utf-8") as f:
-        f.write('\n\n'.join(ddl))
-    
-    print("Archivo DDL.sql generado en /database/DDL.sql")
-
-# Clase auxiliar para crear tipos ENUM
-class CreateType:
-    def __init__(self, enum_type):
-        self.enum_type = enum_type
-    def __str__(self):
-        # Usar repr para evitar problemas de comillas
-        return f"CREATE TYPE {self.enum_type.name} AS ENUM ({', '.join([repr(v) for v in self.enum_type.enums])});"
+        f.write('-- DDL generado automáticamente\n')
+        for l in ddl:
+            f.write(l + '\n')
+    print('Archivo DDL.sql generado en /database/DDL.sql')
 
 if __name__ == '__main__':
     generate_ddl()

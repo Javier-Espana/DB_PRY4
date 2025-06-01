@@ -255,3 +255,23 @@ class EstadisticasCampana(Base):
     num_voluntarios = Column(Integer, server_default=text('0'))
     ultima_actualizacion = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     campana = relationship('Campana', back_populates='estadisticas')
+
+# Vista para reportes: total donado por campaña
+class VistaDonacionesCampana(Base):
+    __tablename__ = 'vista_donaciones_campana'
+    __table_args__ = {'info': dict(is_view=True)}
+
+    campana_id = Column(Integer, primary_key=True)
+    nombre_campana = Column(String(100))
+    monto_total = Column(Numeric(12, 2))
+    num_donaciones = Column(Integer)
+    fecha_inicio = Column(Date)
+    fecha_fin = Column(Date)
+
+# Nota: Esta clase asume que existe una vista SQL llamada 'vista_donaciones_campana' en la base de datos.
+# Debes crearla en tu DDL.sql, por ejemplo:
+# CREATE OR REPLACE VIEW vista_donaciones_campana AS
+# SELECT c.campana_id, c.nombre AS nombre_campana, COALESCE(SUM(d.monto), 0) AS monto_total, COUNT(d.donacion_id) AS num_donaciones, c.fecha_inicio, c.fecha_fin
+# FROM campana c
+# LEFT JOIN donacion d ON d.campana_id = c.campana_id AND d.tipo = 'monetaria'
+# GROUP BY c.campana_id, c.nombre, c.fecha_inicio, c.fecha_fin;

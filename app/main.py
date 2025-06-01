@@ -1,13 +1,13 @@
 # main.py (actualizado)
 import streamlit as st
 from db.connection import get_session
-from services.crud_organizacion import (
+from services.crud_organization import (
     get_organizaciones, 
+    get_organizacion,  # <-- Agrega esta importación
     create_organizacion,
     update_organizacion,
     delete_organizacion
 )
-from models import VistaDonacionesCampana
 
 # CRUD Organización
 def organizacion_crud():
@@ -51,38 +51,31 @@ def organizacion_crud():
                     nombre = st.text_input("Nombre", value=org.nombre)
                     email = st.text_input("Email", value=org.email)
                     activa = st.checkbox("Activa", value=org.activa)
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.form_submit_button("Actualizar"):
-                            try:
-                                update_organizacion(db, org_id, {
-                                    "nombre": nombre,
-                                    "email": email,
-                                    "activa": activa
-                                })
-                                st.success("Organización actualizada!")
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                    with col2:
-                        if st.button("Eliminar"):
+                    submitted_update = st.form_submit_button("Actualizar")
+                    submitted_delete = st.form_submit_button("Eliminar")
+                    if submitted_update:
+                        try:
+                            update_organizacion(db, org_id, {
+                                "nombre": nombre,
+                                "email": email,
+                                "activa": activa
+                            })
+                            st.success("Organización actualizada!")
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                    if submitted_delete:
+                        try:
                             if delete_organizacion(db, org_id):
                                 st.success("Organización eliminada!")
                             else:
                                 st.error("Error al eliminar")
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
 # Vista de reporte
 def reporte_donaciones():
     st.header("Reporte de Donaciones por Campaña (Vista SQL)")
-    db = get_session()
-    
-    resultados = db.query(VistaDonacionesCampana).all()
-    st.table([{
-        "Campaña": r.nombre_campana,
-        "Donaciones": r.total_donaciones,
-        "Monto Total": f"${r.monto_total:,.2f}",
-        "Cumplimiento": f"{r.porcentaje_cumplimiento:.2%}"
-    } for r in resultados])
+    st.info("La vista 'VistaDonacionesCampana' aún no está implementada en models.py. Agrega la clase o ajusta el reporte aquí.")
 
 def main():
     st.set_page_config(page_title="ONG ORM", layout="wide")
