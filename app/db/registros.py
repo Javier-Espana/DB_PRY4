@@ -199,9 +199,13 @@ def generar_inserts_sql():
     for _ in range(random.randint(100, 200)):
         campana_id = random.randint(1, campana_id_counter-1)
         nombre = fake.word().capitalize()
-        cantidad = random.randint(1, 100)
+        descripcion = fake.sentence()
+        cantidad_requerida = random.randint(1, 100)
+        cantidad_actual = random.randint(0, cantidad_requerida)
+        unidad_medida = random.choice(['unidades', 'kg', 'litros', 'paquetes', 'cajas'])
         inserts.append(
-            f"INSERT INTO recurso (recurso_id, campana_id, nombre, cantidad) VALUES ({recurso_id_counter}, {campana_id}, '{nombre}', {cantidad});"
+            f"INSERT INTO recurso (recurso_id, campana_id, nombre, descripcion, cantidad_requerida, cantidad_actual, unidad_medida) "
+            f"VALUES ({recurso_id_counter}, {campana_id}, '{nombre}', '{descripcion}', {cantidad_requerida}, {cantidad_actual}, '{unidad_medida}');"
         )
         recurso_id_counter += 1
         total_registros += 1
@@ -253,19 +257,33 @@ def generar_inserts_sql():
     for donante_id in range(1, donante_id_counter):
         tipo = random.choice(tipos_contacto)
         valor = fake.phone_number() if tipo != 'email' else fake.email()
+        permitido = random.choice([True, False])
+        prioridad = random.randint(1, 3)
+        fecha_creacion = fake.date_time_between(start_date='-2y', end_date='now')
         inserts.append(
-            f"INSERT INTO preferencia_contacto (preferencia_id, donante_id, tipo, valor) VALUES ({preferencia_id_counter}, {donante_id}, '{tipo}', '{valor}');"
+            f"INSERT INTO preferencia_contacto (preferencia_id, donante_id, tipo, valor, permitido, prioridad, fecha_creacion) "
+            f"VALUES ({preferencia_id_counter}, {donante_id}, '{tipo}', '{valor}', {permitido}, {prioridad}, '{fecha_creacion}');"
         )
         preferencia_id_counter += 1
         total_registros += 1
     # Estadisticas_Campana (1 por campaña)
+    estadisticas_insertadas = set()  # Conjunto para rastrear campañas ya procesadas
+
     for campana_id in range(1, campana_id_counter):
-        total_donaciones = random.randint(0, 100)
-        monto_total = round(random.uniform(0, 10000), 2)
-        inserts.append(
-            f"INSERT INTO estadisticas_campana (campana_id, total_donaciones, monto_total) VALUES ({campana_id}, {total_donaciones}, {monto_total});"
-        )
-        total_registros += 1
+        if campana_id not in estadisticas_insertadas:  # Solo insertar si no existe
+            num_donaciones = random.randint(0, 100)
+            monto_recaudado = round(random.uniform(0, 10000), 2)
+            porcentaje_meta = round(random.uniform(0, 100), 2)
+            num_voluntarios = random.randint(0, 50)
+            ultima_actualizacion = fake.date_time_between(start_date='-2y', end_date='now')
+            
+            inserts.append(
+                f"INSERT INTO estadisticas_campana (campana_id, monto_recaudado, porcentaje_meta, num_donaciones, num_voluntarios, ultima_actualizacion) "
+                f"VALUES ({campana_id}, {monto_recaudado}, {porcentaje_meta}, {num_donaciones}, {num_voluntarios}, '{ultima_actualizacion}') "
+                f"ON CONFLICT (campana_id) DO NOTHING;"
+            )
+            estadisticas_insertadas.add(campana_id)
+            total_registros += 1
     # Escribir archivo
     os.makedirs("/database", exist_ok=True)
     with open("/database/Registros.sql", "w", encoding="utf-8") as f:

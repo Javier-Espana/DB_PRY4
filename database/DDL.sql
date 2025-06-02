@@ -14,9 +14,7 @@ CREATE TABLE categoria (
 	descripcion TEXT, 
 	PRIMARY KEY (categoria_id), 
 	UNIQUE (nombre)
-)
-
-
+);
 
 CREATE TABLE donante (
 	donante_id SERIAL NOT NULL, 
@@ -31,9 +29,7 @@ CREATE TABLE donante (
 	PRIMARY KEY (donante_id), 
 	CONSTRAINT chk_tipo_donante CHECK ((tipo = 'individual' AND apellido IS NOT NULL AND nombre IS NOT NULL AND empresa IS NULL) OR (tipo = 'empresa' AND empresa IS NOT NULL AND nombre IS NULL AND apellido IS NULL)), 
 	UNIQUE (email)
-)
-
-
+);
 
 CREATE TABLE habilidad (
 	habilidad_id SERIAL NOT NULL, 
@@ -42,9 +38,7 @@ CREATE TABLE habilidad (
 	categoria VARCHAR(50), 
 	PRIMARY KEY (habilidad_id), 
 	UNIQUE (nombre)
-)
-
-
+);
 
 CREATE TABLE organizacion (
 	organizacion_id SERIAL NOT NULL, 
@@ -59,9 +53,7 @@ CREATE TABLE organizacion (
 	PRIMARY KEY (organizacion_id), 
 	CONSTRAINT chk_email_org CHECK (email ~* '^[A-Za-z0-9._%%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'), 
 	UNIQUE (email)
-)
-
-
+);
 
 CREATE TABLE sede (
 	sede_id SERIAL NOT NULL, 
@@ -76,9 +68,7 @@ CREATE TABLE sede (
 	horario_cierre TIME WITHOUT TIME ZONE, 
 	PRIMARY KEY (sede_id), 
 	CONSTRAINT chk_horario CHECK (horario_cierre > horario_apertura)
-)
-
-
+);
 
 CREATE TABLE voluntario (
 	voluntario_id SERIAL NOT NULL, 
@@ -94,9 +84,7 @@ CREATE TABLE voluntario (
 	CONSTRAINT chk_edad CHECK (fecha_nacimiento <= CURRENT_DATE - INTERVAL '16 years'), 
 	CONSTRAINT chk_email_voluntario CHECK (email ~* '^[A-Za-z0-9._%%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'), 
 	UNIQUE (email)
-)
-
-
+);
 
 CREATE TABLE campana (
 	campana_id SERIAL NOT NULL, 
@@ -111,12 +99,10 @@ CREATE TABLE campana (
 	estado estado_campana DEFAULT 'planificada' NOT NULL, 
 	PRIMARY KEY (campana_id), 
 	CONSTRAINT chk_fechas CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio), 
-	organizacion_id REFERENCES organizacion (organizacion_id), 
-	categoria_id REFERENCES categoria (categoria_id), 
-	sede_principal_id REFERENCES sede (sede_id)
-)
-
-
+	CONSTRAINT fk_campana_organizacion_id_1 FOREIGN KEY(organizacion_id) REFERENCES organizacion (organizacion_id), 
+	CONSTRAINT fk_campana_categoria_id_2 FOREIGN KEY(categoria_id) REFERENCES categoria (categoria_id), 
+	CONSTRAINT fk_campana_sede_principal_id_3 FOREIGN KEY(sede_principal_id) REFERENCES sede (sede_id)
+);
 
 CREATE TABLE disponibilidad_voluntario (
 	disponibilidad_id SERIAL NOT NULL, 
@@ -127,22 +113,21 @@ CREATE TABLE disponibilidad_voluntario (
 	PRIMARY KEY (disponibilidad_id), 
 	CONSTRAINT chk_horas CHECK (hora_fin > hora_inicio), 
 	CONSTRAINT uq_disponibilidad UNIQUE (voluntario_id, dia, hora_inicio, hora_fin), 
-	voluntario_id REFERENCES voluntario (voluntario_id)
-)
-
-
+	CONSTRAINT fk_disponibilidad_voluntario_voluntario_id_1 FOREIGN KEY(voluntario_id) REFERENCES voluntario (voluntario_id)
+);
 
 CREATE TABLE preferencia_contacto (
 	preferencia_id SERIAL NOT NULL, 
 	donante_id INTEGER, 
 	tipo tipo_contacto NOT NULL, 
+	valor VARCHAR(100), 
 	permitido BOOLEAN DEFAULT TRUE, 
+	prioridad INTEGER, 
+	fecha_creacion TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, 
 	PRIMARY KEY (preferencia_id), 
 	CONSTRAINT uq_preferencia_contacto UNIQUE (donante_id, tipo), 
-	donante_id REFERENCES donante (donante_id)
-)
-
-
+	CONSTRAINT fk_preferencia_contacto_donante_id_1 FOREIGN KEY(donante_id) REFERENCES donante (donante_id)
+);
 
 CREATE TABLE voluntario_habilidad (
 	voluntario_id INTEGER NOT NULL, 
@@ -151,11 +136,9 @@ CREATE TABLE voluntario_habilidad (
 	anios_experiencia INTEGER CHECK (anios_experiencia >= 0), 
 	certificado BOOLEAN DEFAULT FALSE, 
 	PRIMARY KEY (voluntario_id, habilidad_id), 
-	voluntario_id REFERENCES voluntario (voluntario_id), 
-	habilidad_id REFERENCES habilidad (habilidad_id)
-)
-
-
+	CONSTRAINT fk_voluntario_habilidad_voluntario_id_1 FOREIGN KEY(voluntario_id) REFERENCES voluntario (voluntario_id), 
+	CONSTRAINT fk_voluntario_habilidad_habilidad_id_2 FOREIGN KEY(habilidad_id) REFERENCES habilidad (habilidad_id)
+);
 
 CREATE TABLE actividad (
 	actividad_id SERIAL NOT NULL, 
@@ -168,11 +151,9 @@ CREATE TABLE actividad (
 	capacidad_max INTEGER CHECK (capacidad_max > 0), 
 	PRIMARY KEY (actividad_id), 
 	CONSTRAINT chk_fechas_actividad CHECK (fecha_fin > fecha_inicio), 
-	campana_id REFERENCES campana (campana_id), 
-	sede_id REFERENCES sede (sede_id)
-)
-
-
+	CONSTRAINT fk_actividad_campana_id_1 FOREIGN KEY(campana_id) REFERENCES campana (campana_id), 
+	CONSTRAINT fk_actividad_sede_id_2 FOREIGN KEY(sede_id) REFERENCES sede (sede_id)
+);
 
 CREATE TABLE donacion (
 	donacion_id SERIAL NOT NULL, 
@@ -186,11 +167,9 @@ CREATE TABLE donacion (
 	mensaje TEXT, 
 	PRIMARY KEY (donacion_id), 
 	CONSTRAINT chk_tipo_donacion CHECK ((tipo = 'monetaria' AND monto IS NOT NULL AND descripcion_especie IS NULL) OR (tipo = 'especie' AND descripcion_especie IS NOT NULL)), 
-	donante_id REFERENCES donante (donante_id) ON DELETE CASCADE ON UPDATE CASCADE, 
-	campana_id REFERENCES campana (campana_id)
-)
-
-
+	CONSTRAINT fk_donacion_donante_id_1 FOREIGN KEY(donante_id) REFERENCES donante (donante_id) ON DELETE CASCADE ON UPDATE CASCADE, 
+	CONSTRAINT fk_donacion_campana_id_2 FOREIGN KEY(campana_id) REFERENCES campana (campana_id)
+);
 
 CREATE TABLE estadisticas_campana (
 	campana_id INTEGER NOT NULL, 
@@ -200,10 +179,8 @@ CREATE TABLE estadisticas_campana (
 	num_voluntarios INTEGER DEFAULT 0, 
 	ultima_actualizacion TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP, 
 	PRIMARY KEY (campana_id), 
-	campana_id REFERENCES campana (campana_id)
-)
-
-
+	CONSTRAINT fk_estadisticas_campana_campana_id_1 FOREIGN KEY(campana_id) REFERENCES campana (campana_id)
+);
 
 CREATE TABLE recurso (
 	recurso_id SERIAL NOT NULL, 
@@ -214,10 +191,8 @@ CREATE TABLE recurso (
 	cantidad_actual INTEGER DEFAULT 0 NOT NULL CHECK (cantidad_actual >= 0), 
 	unidad_medida VARCHAR(20), 
 	PRIMARY KEY (recurso_id), 
-	campana_id REFERENCES campana (campana_id)
-)
-
-
+	CONSTRAINT fk_recurso_campana_id_1 FOREIGN KEY(campana_id) REFERENCES campana (campana_id)
+);
 
 CREATE TABLE voluntario_actividad (
 	voluntario_id INTEGER NOT NULL, 
@@ -227,11 +202,9 @@ CREATE TABLE voluntario_actividad (
 	comentarios TEXT, 
 	estado VARCHAR(20) DEFAULT 'pendiente', 
 	PRIMARY KEY (voluntario_id, actividad_id), 
-	voluntario_id REFERENCES voluntario (voluntario_id), 
-	actividad_id REFERENCES actividad (actividad_id)
-)
-
-
+	CONSTRAINT fk_voluntario_actividad_voluntario_id_1 FOREIGN KEY(voluntario_id) REFERENCES voluntario (voluntario_id), 
+	CONSTRAINT fk_voluntario_actividad_actividad_id_2 FOREIGN KEY(actividad_id) REFERENCES actividad (actividad_id)
+);
 
 --TRIGGERS
 CREATE OR REPLACE FUNCTION actualizar_estadisticas_donacion()

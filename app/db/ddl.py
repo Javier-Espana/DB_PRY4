@@ -3,9 +3,10 @@ from sqlalchemy.schema import CreateTable
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from sqlalchemy.sql import text
 import os
+import re
 
 def generate_ddl():
-    engine = create_engine('postgresql://user:password@localhost/dbname')
+    engine = create_engine('postgresql://admin:admin_password@db:5432/reporteria_db')
     metadata = MetaData()
 
     # Definir tipos ENUM personalizados
@@ -97,7 +98,10 @@ def generate_ddl():
         Column('preferencia_id', Integer, primary_key=True, autoincrement=True),
         Column('donante_id', Integer, ForeignKey('donante.donante_id')),
         Column('tipo', tipo_contacto, nullable=False),
+        Column('valor', String(100)),
         Column('permitido', Boolean, server_default=text('TRUE')),
+        Column('prioridad', Integer),
+        Column('fecha_creacion', TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP')),
         UniqueConstraint('donante_id', 'tipo', name='uq_preferencia_contacto')
     )
 
@@ -200,10 +204,21 @@ def generate_ddl():
         create_table = str(CreateTable(table).compile(engine))
         # Reemplazar NUMERIC por DECIMAL para coincidir con tu ejemplo
         create_table = create_table.replace("NUMERIC", "DECIMAL")
-        # Reemplazar REFERENCES por REFERENCES para mantener consistencia
-        create_table = create_table.replace("FOREIGN KEY(", "").replace(") REFERENCES ", " REFERENCES ")
+        # Agregar nombre a cada constraint FOREIGN KEY
+        def fk_namer(match, table_name=table.name):
+            # match.group(1) es el contenido entre paréntesis (las columnas)
+            cols = match.group(1).replace(' ', '').replace('\n', '').split(',')
+            # Si hay varias columnas, únelas con guion bajo
+            col_part = '_'.join(cols)
+            # Contador para múltiples FKs en la misma tabla
+            fk_namer.counter += 1
+            return f'CONSTRAINT fk_{table_name}_{col_part}_{fk_namer.counter} FOREIGN KEY({match.group(1)})'
+        fk_namer.counter = 0
+        create_table = re.sub(r'FOREIGN KEY\s*\(([^)]+)\)', fk_namer, create_table)
         # Ajustar formato general
         create_table = create_table.replace(",\n    ", ",\n    ")
+        # Agregar punto y coma al final
+        create_table = create_table.rstrip() + ';'
         ddl.append(create_table)
     
     # Agregar triggers
