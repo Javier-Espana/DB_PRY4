@@ -85,8 +85,8 @@ def resumen_donaciones_por_campana():
     # Filtros
     today = datetime.date.today()
     filters = {
-        "fecha_inicio_campana": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1)},
-        "fecha_fin_campana": {"type": "date", "label": "Fecha fin", "value": today},
+        "fecha_inicio_campana": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1).replace(year=today.year - 3)},
+        "fecha_fin_campana": {"type": "date", "label": "Fecha fin", "value": today.replace(month=today.month + 1)},
         "monto_minimo_campana": {"type": "number", "label": "Monto mínimo", "value": 0, "min": 0},
         "monto_maximo_campana": {"type": "number", "label": "Monto máximo", "value": 10000, "min": 0},
     }
@@ -275,21 +275,23 @@ def participacion_voluntarios_por_actividad():
     # Filtros con keys únicos para este segmento
     today = datetime.date.today()
     filters = {
-        "fecha_inicio_voluntarios": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1)},
-        "fecha_fin_voluntarios": {"type": "date", "label": "Fecha fin", "value": today},
+        "fecha_inicio_voluntarios": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1).replace(year=today.year - 3).replace(year=today.year - 3)},
+        "fecha_fin_voluntarios": {"type": "date", "label": "Fecha fin", "value": today.replace(month=today.month + 1)},
         "edad_minima_voluntarios": {"type": "number", "label": "Edad mínima", "value": 16, "min": 0},
         "edad_maxima_voluntarios": {"type": "number", "label": "Edad máxima", "value": 99, "min": 0},
     }
     render_filters(filters)
     fecha_inicio = st.session_state.get("fecha_inicio_voluntarios")
     fecha_fin = st.session_state.get("fecha_fin_voluntarios")
-    edad_minima = st.session_state.get("edad_minima_voluntarios")
-    edad_maxima = st.session_state.get("edad_maxima_voluntarios")
+    edad_minima = int(st.session_state.get("edad_minima_voluntarios") or 0)
+    edad_maxima = int(st.session_state.get("edad_maxima_voluntarios") or 99)
 
     # Reporte (requiere función get_voluntarios_por_actividad en services.reports)
     try:
         from services.reports import get_voluntarios_por_actividad
+        db = get_session()
         data = get_voluntarios_por_actividad(
+            db,
             fecha_inicio=fecha_inicio,
             fecha_fin=fecha_fin,
             edad_minima=edad_minima,
@@ -376,8 +378,8 @@ def donaciones_por_donante():
     # Filtros
     today = datetime.date.today()
     filters = {
-        "fecha_inicio_donante": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1)},
-        "fecha_fin_donante": {"type": "date", "label": "Fecha fin", "value": today},
+        "fecha_inicio_donante": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1).replace(year=today.year - 3)},
+        "fecha_fin_donante": {"type": "date", "label": "Fecha fin", "value": today.replace(month=today.month + 1)},
         "monto_minimo_donante": {"type": "number", "label": "Monto mínimo", "value": 0, "min": 0},
         "monto_maximo_donante": {"type": "number", "label": "Monto máximo", "value": 10000, "min": 0},
     }
@@ -390,7 +392,9 @@ def donaciones_por_donante():
     # Reporte (requiere función get_donaciones_por_donante en services.reports)
     try:
         from services.reports import get_donaciones_por_donante
+        db = get_session()
         data = get_donaciones_por_donante(
+            db,
             fecha_inicio=fecha_inicio,
             fecha_fin=fecha_fin,
             monto_minimo=monto_minimo,
@@ -528,6 +532,7 @@ def donaciones_por_donante():
 def distribucion_voluntarios_por_edad():
     import datetime
     import streamlit as st
+    import pandas as pd
     from components.ui_elements import render_table, render_filters
     from db.connection import get_session
     try:
@@ -544,8 +549,8 @@ def distribucion_voluntarios_por_edad():
     # Filtros
     today = datetime.date.today()
     filters = {
-        "fecha_inicio_edad": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1)},
-        "fecha_fin_edad": {"type": "date", "label": "Fecha fin", "value": today},
+        "fecha_inicio_edad": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1).replace(year=today.year - 3)},
+        "fecha_fin_edad": {"type": "date", "label": "Fecha fin", "value": today.replace(month=today.month + 1)},
         "genero_edad": {"type": "select", "label": "Género", "options": ["Todos", "M", "F"]},
         "actividad_id_edad": {"type": "number", "label": "ID Actividad", "value": 1, "min": 1},
     }
@@ -560,7 +565,9 @@ def distribucion_voluntarios_por_edad():
     # Reporte (requiere función get_distribucion_voluntarios_por_edad en services.reports)
     if get_distribucion_voluntarios_por_edad:
         try:
+            db = get_session()
             data = get_distribucion_voluntarios_por_edad(
+                db,
                 fecha_inicio=fecha_inicio,
                 fecha_fin=fecha_fin,
                 genero=genero,
@@ -574,7 +581,6 @@ def distribucion_voluntarios_por_edad():
 
     # Gráfica
     if data:
-        import pandas as pd
         import plotly.express as px
         df = pd.DataFrame(data)
         if 'grupo_edad' in df.columns and 'total_voluntarios' in df.columns:
@@ -654,8 +660,8 @@ def efectividad_campanas():
     # Filtros
     today = datetime.date.today()
     filters = {
-        "fecha_inicio_efectividad": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1)},
-        "fecha_fin_efectividad": {"type": "date", "label": "Fecha fin", "value": today},
+        "fecha_inicio_efectividad": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1).replace(year=today.year - 3)},
+        "fecha_fin_efectividad": {"type": "date", "label": "Fecha fin", "value": today.replace(month=today.month + 1).replace(month=today.month + 1)},
         "estado_efectividad": {"type": "select", "label": "Estado", "options": ["Todos", "planificada", "activa", "pausada", "finalizada"]},
     }
     render_filters(filters)
@@ -668,7 +674,9 @@ def efectividad_campanas():
     # Reporte (requiere función get_efectividad_campanas en services.reports)
     if get_efectividad_campanas:
         try:
+            db = get_session()
             data = get_efectividad_campanas(
+                db,
                 fecha_inicio=fecha_inicio,
                 fecha_fin=fecha_fin,
                 estado=estado
@@ -781,12 +789,12 @@ def efectividad_campanas():
                             st.error(f"Error: {e}")
 def main():
     st.set_page_config(page_title="ONG ORM", layout="wide")
-    organizacion_crud()
-    resumen_donaciones_por_campana()
-    participacion_voluntarios_por_actividad()
-    donaciones_por_donante()
+    #organizacion_crud()
+    #resumen_donaciones_por_campana()
+    #participacion_voluntarios_por_actividad()
+    #donaciones_por_donante()
     distribucion_voluntarios_por_edad()
-    efectividad_campanas()
+    #efectividad_campanas()
 
 if __name__ == "__main__":
     main()

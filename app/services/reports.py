@@ -32,24 +32,34 @@ def get_donaciones_por_campana(db: Session, fecha_inicio=None, fecha_fin=None, m
     ]
 
 def get_voluntarios_por_actividad(db: Session, fecha_inicio=None, fecha_fin=None, edad_minima=None, edad_maxima=None):
-    # Suponiendo que VoluntarioActividad tiene fecha y Voluntario tiene edad
+    import datetime
+    from models import Actividad
+
+    today = datetime.date.today()
     query = db.query(
         VoluntarioActividad.actividad_id,
+        Actividad.nombre.label('nombre_actividad'),
         func.count(VoluntarioActividad.voluntario_id).label('num_voluntarios')
-    ).join(Voluntario, Voluntario.voluntario_id == VoluntarioActividad.voluntario_id)
+    ).join(Voluntario, Voluntario.voluntario_id == VoluntarioActividad.voluntario_id
+    ).join(Actividad, Actividad.actividad_id == VoluntarioActividad.actividad_id)
+
     if fecha_inicio:
-        query = query.filter(VoluntarioActividad.fecha >= fecha_inicio)
+        query = query.filter(VoluntarioActividad.fecha_registro >= fecha_inicio)
     if fecha_fin:
-        query = query.filter(VoluntarioActividad.fecha <= fecha_fin)
+        query = query.filter(VoluntarioActividad.fecha_registro <= fecha_fin)
     if edad_minima is not None:
-        query = query.filter(Voluntario.edad >= edad_minima)
+        fecha_nac_max = today - datetime.timedelta(days=edad_minima*365)
+        query = query.filter(Voluntario.fecha_nacimiento <= fecha_nac_max)
     if edad_maxima is not None:
-        query = query.filter(Voluntario.edad <= edad_maxima)
-    query = query.group_by(VoluntarioActividad.actividad_id)
+        fecha_nac_min = today - datetime.timedelta(days=edad_maxima*365)
+        query = query.filter(Voluntario.fecha_nacimiento >= fecha_nac_min)
+
+    query = query.group_by(VoluntarioActividad.actividad_id, Actividad.nombre)
     result = query.all()
     return [
         {
             'actividad_id': r.actividad_id,
+            'nombre_actividad': r.nombre_actividad,
             'num_voluntarios': r.num_voluntarios
         }
         for r in result
@@ -85,19 +95,22 @@ def get_donaciones_por_donante(db: Session, fecha_inicio=None, fecha_fin=None, m
     ]
 
 def get_distribucion_voluntarios_por_edad(db: Session, edad_minima=None, edad_maxima=None):
+    today = datetime.date.today()
+    # Calcula la edad en la consulta
+    edad_expr = func.extract('year', func.age(today, Voluntario.fecha_nacimiento)).label('edad')
     query = db.query(
-        Voluntario.edad,
+        edad_expr,
         func.count(Voluntario.voluntario_id).label('num_voluntarios')
     )
     if edad_minima is not None:
-        query = query.filter(Voluntario.edad >= edad_minima)
+        query = query.filter(edad_expr >= edad_minima)
     if edad_maxima is not None:
-        query = query.filter(Voluntario.edad <= edad_maxima)
-    query = query.group_by(Voluntario.edad).order_by(Voluntario.edad)
+        query = query.filter(edad_expr <= edad_maxima)
+    query = query.group_by(edad_expr).order_by(edad_expr)
     result = query.all()
     return [
         {
-            'edad': r.edad,
+            'edad': int(r.edad),
             'num_voluntarios': r.num_voluntarios
         }
         for r in result
