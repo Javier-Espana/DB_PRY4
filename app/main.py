@@ -812,12 +812,12 @@ def efectividad_campanas():
 
 def main():
     st.set_page_config(page_title="ONG ORM", layout="wide")
-    #organizacion_crud()
-    #resumen_donaciones_por_campana()
-    #participacion_voluntarios_por_actividad()
-    #donaciones_por_donante()
+    organizacion_crud()
+    resumen_donaciones_por_campana()
+    participacion_voluntarios_por_actividad()
+    donaciones_por_donante()
     distribucion_voluntarios_por_edad()
-    #efectividad_campanas()
+    efectividad_campanas()
 
 if __name__ == "__main__":
     main()
