@@ -41,8 +41,11 @@ def organizacion_crud():
                         "activa": activa
                     })
                     st.success(f"Organización {org.nombre} creada!")
+                except ValueError as ve:
+                    st.error(f"Error al crear organización: {str(ve)}")
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Error al crear organización: {str(e)}")
+                    db.rollback()
     
     with tab3:
         org_id = st.number_input("ID Organización", min_value=1, key="edit_org_id")
@@ -139,8 +142,11 @@ def resumen_donaciones_por_campana():
                     }
                     create_donacion(db, data)
                     st.success("Donación creada!")
+                except ValueError as ve:
+                    st.error(f"Error al crear donación: {str(ve)}")
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Error al crear donación: {str(e)}")
+                    db.rollback()
     with tab3:
         donacion_id = st.number_input("ID Donación", min_value=1, key="edit_donacion_id")
         if donacion_id:
@@ -230,7 +236,6 @@ def resumen_donaciones_por_campana():
                     fecha_inicio = st.date_input("Fecha inicio", value=campana.fecha_inicio or today, key="edit_campana_fecha_inicio")
                     fecha_fin = st.date_input("Fecha fin", value=campana.fecha_fin or today, key="edit_campana_fecha_fin")
                     meta_monetaria = st.number_input("Meta monetaria", min_value=0.0, step=0.01, value=float(campana.meta_monetaria) if campana.meta_monetaria else 0.0, key="edit_campana_meta")
-                    # CORRECCIÓN: Convertir Enum a string para el índice
                     estado_list = ["planificada", "activa", "pausada", "finalizada"]
                     estado_value = campana.estado.value if hasattr(campana.estado, 'value') else str(campana.estado) if campana.estado else None
                     estado = st.selectbox("Estado", estado_list, index=estado_list.index(estado_value) if estado_value in estado_list else 0)
@@ -254,6 +259,8 @@ def resumen_donaciones_por_campana():
                             }
                             update_campana(db, campana_id, data)
                             st.success("Campaña actualizada!")
+                        except ValueError as ve:
+                            st.error(f"Error: {str(ve)}")
                         except Exception as e:
                             st.error(f"Error: {e}")
                     if submitted_delete:
@@ -777,6 +784,8 @@ def efectividad_campanas():
                             }
                             update_campana(db, campana_id, data)
                             st.success("Campaña actualizada!")
+                        except ValueError as ve:
+                            st.error(f"Error: {str(ve)}")
                         except Exception as e:
                             st.error(f"Error: {e}")
                     if submitted_delete:
