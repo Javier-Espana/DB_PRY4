@@ -284,9 +284,15 @@ def generar_inserts_sql():
             )
             estadisticas_insertadas.add(campana_id)
             total_registros += 1
-    # Escribir archivo
-    os.makedirs("/database", exist_ok=True)
-    with open("/database/Registros.sql", "w", encoding="utf-8") as f:
+    
+    # Escribir archivo de registros en <project_root>/database/Registros.sql
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+    database_dir = os.path.join(project_root, "database")
+    os.makedirs(database_dir, exist_ok=True)      # sólo crea la carpeta
+    file_path = os.path.join(database_dir, "Registros.sql")
+
+    # ahora sí abrimos el archivo para escribir
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write("-- Datos generados automáticamente con ORM (sin conexión a BD)\n")
         f.write("\n".join(inserts))
     print(f"Archivo Registros.sql generado con {len(inserts)} INSERTs y {total_registros} registros distribuidos.")

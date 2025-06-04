@@ -23,7 +23,7 @@ def organizacion_crud():
             "ID": o.organizacion_id,
             "Nombre": o.nombre,
             "Email": o.email,
-            "Activa": o.activa
+            "Activa": "✅" if o.activa else "❌"
         } for o in orgs])
     
     with tab2:

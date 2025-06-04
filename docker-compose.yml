@@ -5,6 +5,7 @@ services:
     volumes:
       - ./app:/app
       - ./database:/database
+    entrypoint: /bin/sh -c "python db/ddl.py && python db/registros.py"
 
   db:
     image: postgres:15
@@ -17,10 +18,10 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./database/DDL.sql:/docker-entrypoint-initdb.d/DDL.sql:ro
-      - ./database/registros.sql:/docker-entrypoint-initdb.d/registros.sql:ro
+      - ./database:/docker-entrypoint-initdb.d:ro
     depends_on:
-      - initdb
+      initdb:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d reporteria_db"]
       interval: 10s
