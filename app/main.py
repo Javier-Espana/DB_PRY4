@@ -197,13 +197,18 @@ def resumen_donaciones_por_campana():
                         if create_donante is None:
                             st.error("La función para crear donantes no está disponible.")
                             raise Exception("create_donante no importado")
-                        nuevo_donante = create_donante(db, {
-                            "nombre": nombre,
-                            "apellido": apellido,
-                            "email": email,
-                            "tipo": tipo_donante
-                        })
-                        donante_id = nuevo_donante.donante_id
+                        try:
+                            nuevo_donante = create_donante(db, {
+                                "nombre": nombre,
+                                "apellido": apellido,
+                                "email": email,
+                                "tipo": tipo_donante
+                            })
+                            donante_id = nuevo_donante.donante_id
+                        except Exception as e:
+                            st.error(f"Error al crear el nuevo donante: {e}")
+                            db.rollback()
+                            raise e
 
                     if tipo == "monetaria" and (monto is None or monto <= 0):
                         st.error("No se ingresó monto")
@@ -680,27 +685,51 @@ def distribucion_voluntarios_por_edad():
                 apellido = st.text_input("Apellido", key="crear_voluntario_apellido")
                 email = st.text_input("Email", key="crear_voluntario_email")
                 fecha_nacimiento = st.date_input("Fecha de Nacimiento", value=today.replace(year=today.year-20), key="crear_voluntario_fecha_nac")
+                # Validación de edad mínima (por ejemplo, 16 años)
+                edad_minima = 16
+                edad = today.year - fecha_nacimiento.year - ((today.month, today.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
                 if st.form_submit_button("Crear"):
                     try:
-                        data = {"nombre": nombre, "apellido": apellido, "email": email, "fecha_nacimiento": fecha_nacimiento}
-                        create_voluntario(db, data)
-                        st.success("Voluntario creado!")
+                        if edad < edad_minima:
+                            st.error(f"El voluntario debe tener al menos {edad_minima} años.")
+                        else:
+                            data = {"nombre": nombre, "apellido": apellido, "email": email, "fecha_nacimiento": fecha_nacimiento}
+                            create_voluntario(db, data)
+                            st.success("Voluntario creado!")
                     except Exception as e:
                         st.error(f"Error: {e}")
         with tab3:
             voluntario_id = st.number_input("ID Voluntario", min_value=1, key="edit_voluntario_id")
             voluntario = get_voluntario(db, voluntario_id)
+            # Vista previa de la persona seleccionada
+            if voluntario:
+                st.markdown(
+                    f"""
+                    **Nombre:** {voluntario.nombre}  
+                    **Apellido:** {voluntario.apellido}  
+                    **Email:** {voluntario.email}  
+                    **Fecha de Nacimiento:** {voluntario.fecha_nacimiento}
+                    """
+                )
             if voluntario:
                 with st.form("editar_voluntario"):
                     nombre = st.text_input("Nombre", value=voluntario.nombre, key="edit_voluntario_nombre")
                     apellido = st.text_input("Apellido", value=voluntario.apellido, key="edit_voluntario_apellido")
                     email = st.text_input("Email", value=voluntario.email, key="edit_voluntario_email")
                     fecha_nacimiento = st.date_input("Fecha de Nacimiento", value=voluntario.fecha_nacimiento, key="edit_voluntario_fecha_nac")
+                    # Si tienes nivel_habilidad como campo editable, normaliza a minúsculas aquí también
+                    # nivel_habilidad = st.selectbox("Nivel Habilidad", ["basico", "intermedio", "avanzado"], key="edit_voluntario_nivel") 
                     submitted_update = st.form_submit_button("Actualizar")
                     submitted_delete = st.form_submit_button("Eliminar")
                     if submitted_update:
                         try:
-                            data = {"nombre": nombre, "apellido": apellido, "email": email, "fecha_nacimiento": fecha_nacimiento}
+                            data = {
+                                "nombre": nombre,
+                                "apellido": apellido,
+                                "email": email,
+                                "fecha_nacimiento": fecha_nacimiento,
+                                # "nivel_habilidad": nivel_habilidad.lower() if nivel_habilidad else None
+                            }
                             update_voluntario(db, voluntario_id, data)
                             st.success("Voluntario actualizado!")
                         except Exception as e:
@@ -713,7 +742,8 @@ def distribucion_voluntarios_por_edad():
                                 st.error("Error al eliminar")
                         except Exception as e:
                             st.error(f"Error: {e}")
-
+            elif voluntario_id:
+                st.warning("No se encontró voluntario con ese ID.")
 def efectividad_campanas():
     import datetime
     import streamlit as st
@@ -786,8 +816,8 @@ def main():
     #resumen_donaciones_por_campana()
     #participacion_voluntarios_por_actividad()
     #donaciones_por_donante()
-    #distribucion_voluntarios_por_edad()
-    efectividad_campanas()
+    distribucion_voluntarios_por_edad()
+    #efectividad_campanas()
 
 if __name__ == "__main__":
     main()
