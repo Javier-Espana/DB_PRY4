@@ -1,5 +1,6 @@
 # main.py (actualizado)
 import streamlit as st
+import pandas as pd
 from db.connection import get_session
 from services.crud_organization import (
     get_organizaciones, 
@@ -110,7 +111,8 @@ def resumen_donaciones_por_campana():
     tab1, tab2, tab3 = st.tabs(["Ver Donaciones", "Crear Donación", "Editar/Eliminar Donación"])
     with tab1:
         donaciones = get_donaciones(db)
-        st.table([{k: str(getattr(d, k)) for k in d.__table__.columns.keys()} for d in donaciones])
+        df = pd.DataFrame([{k: getattr(d, k) for k in d.__table__.columns.keys()} for d in donaciones])
+        st.dataframe(df, height=400)
     with tab2:
         with st.form("crear_donacion"):
             campana_id = st.number_input("Campaña ID", min_value=1, key="donacion_campana_id")
@@ -175,7 +177,8 @@ def resumen_donaciones_por_campana():
     tabc1, tabc2, tabc3 = st.tabs(["Ver Campañas", "Crear Campaña", "Editar/Eliminar Campaña"])
     with tabc1:
         campanas = get_campanas(db)
-        st.table([{k: str(getattr(c, k)) for k in c.__table__.columns.keys()} for c in campanas])
+        df = pd.DataFrame([{k: getattr(c, k) for k in c.__table__.columns.keys()} for c in campanas])
+        st.dataframe(df, height=400)
     with tabc2:
         with st.form("crear_campana"):
             nombre = st.text_input("Nombre", key="crear_campana_nombre")
@@ -289,7 +292,8 @@ def participacion_voluntarios_por_actividad():
     tab1, tab2, tab3 = st.tabs(["Ver Participaciones", "Crear Participación", "Editar/Eliminar Participación"])
     with tab1:
         participaciones = get_voluntario_actividades(db)
-        st.table([{k: str(getattr(p, k)) for k in p.__table__.columns.keys()} for p in participaciones])
+        df = pd.DataFrame([{k: getattr(v, k) for k in v.__table__.columns.keys()} for v in participaciones])
+        st.dataframe(df, height=400)
     with tab2:
         with st.form("crear_va"):
             voluntario_id = st.number_input("Voluntario ID", min_value=1, key="va_voluntario_id")
@@ -389,7 +393,8 @@ def donaciones_por_donante():
     tab1, tab2, tab3 = st.tabs(["Ver Donaciones", "Crear Donación", "Editar/Eliminar Donación"])
     with tab1:
         donaciones = get_donaciones(db)
-        st.table([{k: str(getattr(d, k)) for k in d.__table__.columns.keys()} for d in donaciones])
+        df = pd.DataFrame([{k: getattr(d, k) for k in d.__table__.columns.keys()} for d in donaciones])
+        st.dataframe(df, height=400)
     with tab2:
         with st.form("crear_donacion_donante"):
             donante_id = st.number_input("Donante ID", min_value=1, key="donante_donante_id")
@@ -556,7 +561,8 @@ def distribucion_voluntarios_por_edad():
         tab1, tab2, tab3 = st.tabs(["Ver Voluntarios", "Crear Voluntario", "Editar/Eliminar Voluntario"])
         with tab1:
             voluntarios = get_voluntarios(db)
-            st.table([{k: str(getattr(v, k)) for k in v.__table__.columns.keys()} for v in voluntarios])
+            df = pd.DataFrame([{k: getattr(v, k) for k in v.__table__.columns.keys()} for v in voluntarios])
+            st.dataframe(df, height=400)
         with tab2:
             with st.form("crear_voluntario"):
                 nombre = st.text_input("Nombre", key="crear_voluntario_nombre")
@@ -599,6 +605,7 @@ def distribucion_voluntarios_por_edad():
 def efectividad_campanas():
     import datetime
     import streamlit as st
+    import pandas as pd
     from components.ui_elements import render_table, render_filters
     from db.connection import get_session
     try:
@@ -660,7 +667,8 @@ def efectividad_campanas():
         tab1, tab2, tab3 = st.tabs(["Ver Campañas", "Crear Campaña", "Editar/Eliminar Campaña"])
         with tab1:
             campanas = get_campanas(db)
-            st.table([{k: str(getattr(c, k)) for k in c.__table__.columns.keys()} for c in campanas])
+            df = pd.DataFrame([{k: getattr(c, k) for k in c.__table__.columns.keys()} for c in campanas])
+            st.dataframe(df, height=400)
         with tab2:
             with st.form("crear_campana_efectividad"):
                 nombre = st.text_input("Nombre", key="efectividad_crear_campana_nombre")
