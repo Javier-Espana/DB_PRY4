@@ -123,25 +123,101 @@ def resumen_donaciones_por_campana():
         ])
         st.dataframe(df, height=400)
     with tab2:
+        # Importar create_donante de forma segura para usarlo más adelante
+        try:
+            from services.crud_donante import create_donante
+        except ImportError:
+            create_donante = None
+        # Obtener campañas existentes para sugerencias
+        campanas_existentes = get_campanas(db)
+        campana_options = [
+            (f"{c.campana_id} - {c.nombre}", c.campana_id) for c in campanas_existentes
+        ]
+        campana_labels = [label for label, _ in campana_options]
+        campana_ids = [cid for _, cid in campana_options]
+
+        # Obtener donantes existentes para sugerencias
+        try:
+            from services.crud_donante import get_donantes
+            donantes_existentes = get_donantes(db)
+            donante_options = [
+                (f"{d.donante_id} - {getattr(d, 'nombre', str(d.donante_id))}", d.donante_id) for d in donantes_existentes
+            ]
+            donante_labels = [label for label, _ in donante_options]
+            donante_ids = [did for _, did in donante_options]
+        except ImportError:
+            donante_labels = []
+            donante_ids = []
         with st.form("crear_donacion"):
-            campana_id = st.number_input("Campaña ID", min_value=1, key="donacion_campana_id")
-            donante_id = st.number_input("Donante ID", min_value=1, key="donacion_donante_id")
+            campana_idx = st.selectbox(
+                "Campaña ID",
+                options=range(len(campana_ids)),
+                format_func=lambda i: campana_labels[i] if i < len(campana_labels) else "",
+                key="donacion_campana_id"
+            ) if campana_ids else None
+            campana_id = campana_ids[campana_idx] if campana_idx is not None else None
+
+            donante_mode = st.radio("¿Donante existente o nuevo?", ["Existente", "Nuevo"], key="donacion_donante_mode")
+            donante_id = None
+            if donante_mode == "Existente":
+                if donante_ids:
+                    donante_idx = st.selectbox(
+                        "Donante ID",
+                        options=range(len(donante_ids)),
+                        format_func=lambda i: donante_labels[i] if i < len(donante_labels) else "",
+                        key="donacion_donante_id"
+                    )
+                    donante_id = donante_ids[donante_idx]
+                else:
+                    st.info("No hay donantes registrados. Por favor, agregue un nuevo donante.")
+            else:
+                nombre = st.text_input("Nombre Donante", key="nuevo_donante_nombre")
+                apellido = st.text_input("Apellido Donante", key="nuevo_donante_apellido")
+                email = st.text_input("Email Donante", key="nuevo_donante_email")
+                tipo_donante = st.selectbox("Tipo Donante", ["individual", "empresa"], key="nuevo_donante_tipo")
+                # donante_id se asignará tras crear el donante
+
             tipo = st.selectbox("Tipo", ["monetaria", "especie"])
             monto = st.number_input("Monto", min_value=0.0, step=0.01, key="donacion_monto") if tipo == "monetaria" else None
             descripcion_especie = st.text_input("Descripción Especie", key="donacion_desc_especie") if tipo == "especie" else None
             fecha = st.date_input("Fecha", value=today, key="donacion_fecha")
             if st.form_submit_button("Crear"):
                 try:
-                    data = {
-                        "campana_id": campana_id,
-                        "donante_id": donante_id,
-                        "tipo": tipo,
-                        "monto": monto if tipo == "monetaria" else None,
-                        "descripcion_especie": descripcion_especie if tipo == "especie" else None,
-                        "fecha": fecha
-                    }
-                    create_donacion(db, data)
-                    st.success("Donación creada!")
+                    if donante_mode == "Existente":
+                        if not donante_ids:
+                            st.error("Debe agregar un donante primero.")
+                            raise Exception("No hay donantes existentes")
+                        if donante_id is None:
+                            st.error("Debe seleccionar un donante válido.")
+                            raise Exception("Donante no seleccionado")
+                    else:
+                        if not nombre or not apellido or not email:
+                            st.error("Debe completar los datos del nuevo donante.")
+                            raise Exception("Datos de donante incompletos")
+                        if create_donante is None:
+                            st.error("La función para crear donantes no está disponible.")
+                            raise Exception("create_donante no importado")
+                        nuevo_donante = create_donante(db, {
+                            "nombre": nombre,
+                            "apellido": apellido,
+                            "email": email,
+                            "tipo": tipo_donante
+                        })
+                        donante_id = nuevo_donante.donante_id
+
+                    if tipo == "monetaria" and (monto is None or monto <= 0):
+                        st.error("No se ingresó monto")
+                    else:
+                        data = {
+                            "campana_id": campana_id,
+                            "donante_id": donante_id,
+                            "tipo": tipo,
+                            "monto": monto if tipo == "monetaria" else None,
+                            "descripcion_especie": descripcion_especie if tipo == "especie" else None,
+                            "fecha": fecha
+                        }
+                        create_donacion(db, data)
+                        st.success("Donación creada!")
                 except ValueError as ve:
                     st.error(f"Error al crear donación: {str(ve)}")
                 except Exception as e:
@@ -198,6 +274,40 @@ def resumen_donaciones_por_campana():
         ])
         st.dataframe(df, height=400)
     with tabc2:
+        # Obtener organizaciones existentes para sugerencias
+        organizaciones_existentes = get_organizaciones(db)
+        org_options = [
+            (f"{o.organizacion_id} - {o.nombre}", o.organizacion_id) for o in organizaciones_existentes
+        ]
+        org_labels = [label for label, _ in org_options]
+        org_ids = [oid for _, oid in org_options]
+
+        # Obtener categorías existentes para sugerencias
+        try:
+            from services.crud_categoria import get_categorias
+            categorias_existentes = get_categorias(db)
+            cat_options = [
+                (f"{c.categoria_id} - {getattr(c, 'nombre', str(c.categoria_id))}", c.categoria_id) for c in categorias_existentes
+            ]
+            cat_labels = [label for label, _ in cat_options]
+            cat_ids = [cid for _, cid in cat_options]
+        except ImportError:
+            cat_labels = []
+            cat_ids = []
+
+        # Obtener sedes existentes para sugerencias
+        try:
+            from services.crud_sede import get_sedes
+            sedes_existentes = get_sedes(db)
+            sede_options = [
+                (f"{s.sede_id} - {getattr(s, 'nombre', str(s.sede_id))}", s.sede_id) for s in sedes_existentes
+            ]
+            sede_labels = [label for label, _ in sede_options]
+            sede_ids = [sid for _, sid in sede_options]
+        except ImportError:
+            sede_labels = []
+            sede_ids = []
+
         with st.form("crear_campana"):
             nombre = st.text_input("Nombre", key="crear_campana_nombre")
             descripcion = st.text_area("Descripción", key="crear_campana_desc")
@@ -205,24 +315,54 @@ def resumen_donaciones_por_campana():
             fecha_fin = st.date_input("Fecha fin", value=today, key="crear_campana_fecha_fin")
             meta_monetaria = st.number_input("Meta monetaria", min_value=0.0, step=0.01, key="crear_campana_meta")
             estado = st.selectbox("Estado", ["planificada", "activa", "pausada", "finalizada"], key="crear_campana_estado")
-            organizacion_id = st.number_input("Organización ID", min_value=1, key="crear_campana_org_id")
-            categoria_id = st.number_input("Categoría ID", min_value=1, key="crear_campana_cat_id")
-            sede_principal_id = st.number_input("Sede Principal ID", min_value=1, key="crear_campana_sede_id")
+            # Usar selectbox para sugerir organizaciones válidas
+            org_idx = st.selectbox(
+                "Organización ID",
+                options=range(len(org_ids)),
+                format_func=lambda i: org_labels[i] if i < len(org_labels) else "",
+                key="crear_campana_org_id"
+            ) if org_ids else None
+            organizacion_id = org_ids[org_idx] if org_idx is not None else None
+
+            # Usar selectbox para sugerir categorías válidas solo si hay categorías
+            cat_idx = st.selectbox(
+                "Categoría ID",
+                options=range(len(cat_ids)),
+                format_func=lambda i: cat_labels[i] if i < len(cat_labels) else "",
+                key="crear_campana_cat_id"
+            ) if cat_ids else None
+            categoria_id = cat_ids[cat_idx] if cat_idx is not None else None
+
+            # Usar selectbox para sugerir sedes válidas
+            sede_idx = st.selectbox(
+                "Sede Principal ID",
+                options=range(len(sede_ids)),
+                format_func=lambda i: sede_labels[i] if i < len(sede_labels) else "",
+                key="crear_campana_sede_id"
+            ) if sede_ids else None
+            sede_principal_id = sede_ids[sede_idx] if sede_idx is not None else None
             if st.form_submit_button("Crear"):
                 try:
-                    data = {
-                        "nombre": nombre,
-                        "descripcion": descripcion,
-                        "fecha_inicio": fecha_inicio,
-                        "fecha_fin": fecha_fin,
-                        "meta_monetaria": meta_monetaria,
-                        "estado": estado,
-                        "organizacion_id": organizacion_id,
-                        "categoria_id": categoria_id,
-                        "sede_principal_id": sede_principal_id
-                    }
-                    create_campana(db, data)
-                    st.success("Campaña creada!")
+                    if organizacion_id is None:
+                        st.error("Debe seleccionar una organización válida.")
+                    elif not cat_ids or categoria_id is None:
+                        st.error("Debe seleccionar una categoría válida.")
+                    elif not sede_ids or sede_principal_id is None:
+                        st.error("Debe seleccionar una sede válida.")
+                    else:
+                        data = {
+                            "nombre": nombre,
+                            "descripcion": descripcion,
+                            "fecha_inicio": fecha_inicio,
+                            "fecha_fin": fecha_fin,
+                            "meta_monetaria": meta_monetaria,
+                            "estado": estado,
+                            "organizacion_id": organizacion_id,
+                            "categoria_id": categoria_id,
+                            "sede_principal_id": sede_principal_id
+                        }
+                        create_campana(db, data)
+                        st.success("Campaña creada!")
                 except Exception as e:
                     st.error(f"Error: {e}")
     with tabc3:
@@ -268,9 +408,11 @@ def resumen_donaciones_por_campana():
                             if delete_campana(db, campana_id):
                                 st.success("Campaña eliminada!")
                             else:
-                                st.error("Error al eliminar")
+                                st.error("No se encontró la campaña para eliminar.")
+                        except ValueError as ve:
+                            st.error(f"Error al eliminar campaña: {str(ve)}")
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            st.error(f"Error inesperado: {str(e)}")
 def participacion_voluntarios_por_actividad():
     from components.ui_elements import render_table, render_filters
     from db.connection import get_session
@@ -793,16 +935,18 @@ def efectividad_campanas():
                             if delete_campana(db, campana_id):
                                 st.success("Campaña eliminada!")
                             else:
-                                st.error("Error al eliminar")
+                                st.error("No se encontró la campaña para eliminar.")
+                        except ValueError as ve:
+                            st.error(f"Error al eliminar campaña: {str(ve)}")
                         except Exception as e:
-                            st.error(f"Error: {e}")
+                            st.error(f"Error inesperado: {str(e)}")
 def main():
     st.set_page_config(page_title="ONG ORM", layout="wide")
     #organizacion_crud()
-    #resumen_donaciones_por_campana()
+    resumen_donaciones_por_campana()
     #participacion_voluntarios_por_actividad()
     #donaciones_por_donante()
-    distribucion_voluntarios_por_edad()
+    #distribucion_voluntarios_por_edad()
     #efectividad_campanas()
 
 if __name__ == "__main__":

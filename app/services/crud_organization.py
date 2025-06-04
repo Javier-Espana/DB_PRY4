@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
-from models import Organizacion
+from models import Organizacion, Campana
 from typing import List, Optional
 
 def get_organizaciones(db: Session, skip: int = 0, limit: int = 100) -> List[Organizacion]:
@@ -44,8 +44,16 @@ def update_organizacion(db: Session, organizacion_id: int, update_data: dict) ->
 
 def delete_organizacion(db: Session, organizacion_id: int) -> bool:
     org = get_organizacion(db, organizacion_id)
-    if org:
-        db.delete(org)
-        db.commit()
-        return True
-    return False
+    if not org:
+        return False
+    # Delete all related activities for each campaign
+    from models import Actividad  # Import here to avoid circular import
+    campanas = db.query(Campana).filter(Campana.organizacion_id == organizacion_id).all()
+    for campana in campanas:
+        actividades = db.query(Actividad).filter(Actividad.campana_id == campana.campana_id).all()
+        for actividad in actividades:
+            db.delete(actividad)
+        db.delete(campana)
+    db.delete(org)
+    db.commit()
+    return True
