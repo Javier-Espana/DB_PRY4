@@ -94,23 +94,25 @@ def get_donaciones_por_donante(db: Session, fecha_inicio=None, fecha_fin=None, m
         for r in result
     ]
 
-def get_distribucion_voluntarios_por_edad(db: Session, edad_minima=None, edad_maxima=None):
+def get_distribucion_voluntarios_por_edad(db: Session, edad_minima=None, edad_maxima=None, anios_por_grupo=10):
     today = datetime.date.today()
-    # Calcula la edad en la consulta
+    # Calcula la edad
     edad_expr = func.extract('year', func.age(today, Voluntario.fecha_nacimiento)).label('edad')
+    # Calcula el grupo de edad (ej: 0-9, 10-19, ...)
+    grupo_edad_expr = (func.floor(edad_expr / anios_por_grupo) * anios_por_grupo).label('grupo_edad')
     query = db.query(
-        edad_expr,
+        grupo_edad_expr,
         func.count(Voluntario.voluntario_id).label('num_voluntarios')
     )
     if edad_minima is not None:
         query = query.filter(edad_expr >= edad_minima)
     if edad_maxima is not None:
         query = query.filter(edad_expr <= edad_maxima)
-    query = query.group_by(edad_expr).order_by(edad_expr)
+    query = query.group_by(grupo_edad_expr).order_by(grupo_edad_expr)
     result = query.all()
     return [
         {
-            'edad': int(r.edad),
+            'grupo_edad': f"{int(r.grupo_edad)}-{int(r.grupo_edad + anios_por_grupo - 1)}",
             'num_voluntarios': r.num_voluntarios
         }
         for r in result

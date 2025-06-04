@@ -553,77 +553,6 @@ def donaciones_por_donante():
         data = []
     render_table("Donaciones por Donante", data)
 
-    st.subheader("CRUD Donaciones")
-    db = get_session()
-    tab1, tab2, tab3 = st.tabs(["Ver Donaciones", "Crear Donación", "Editar/Eliminar Donación"])
-    with tab1:
-        donaciones = get_donaciones(db)
-        df = pd.DataFrame([
-            {
-                k: getattr(d, k).value if hasattr(getattr(d, k), "value") else getattr(d, k)
-                for k in d.__table__.columns.keys()
-            }
-            for d in donaciones
-        ])
-        st.dataframe(df, height=400)
-    with tab2:
-        with st.form("crear_donacion_donante"):
-            donante_id = st.number_input("Donante ID", min_value=1, key="donante_donante_id")
-            campana_id = st.number_input("Campaña ID", min_value=1, key="donante_campana_id")
-            tipo = st.selectbox("Tipo", ["monetaria", "especie"], key="donante_tipo")
-            monto = st.number_input("Monto", min_value=0.0, step=0.01, key="donante_monto") if tipo == "monetaria" else None
-            descripcion_especie = st.text_input("Descripción Especie", key="donante_desc_especie") if tipo == "especie" else None
-            fecha = st.date_input("Fecha", value=today, key="donante_fecha")
-            if st.form_submit_button("Crear"):
-                try:
-                    data = {
-                        "donante_id": donante_id,
-                        "campana_id": campana_id,
-                        "tipo": tipo,
-                        "monto": monto if tipo == "monetaria" else None,
-                        "descripcion_especie": descripcion_especie if tipo == "especie" else None,
-                        "fecha": fecha
-                    }
-                    create_donacion(db, data)
-                    st.success("Donación creada!")
-                except Exception as e:
-                    st.error(f"Error: {e}")
-    with tab3:
-        donacion_id = st.number_input("ID Donación", min_value=1, key="edit_donacion_donante")
-        if donacion_id:
-            donacion = get_donacion(db, donacion_id)
-            if donacion:
-                with st.form("editar_donacion_donante"):
-                    donante_id = st.number_input("Donante ID", min_value=1, value=donacion.donante_id, key="edit_donante_donante_id")
-                    campana_id = st.number_input("Campaña ID", min_value=1, value=donacion.campana_id, key="edit_donante_campana_id")
-                    tipo = st.selectbox("Tipo", ["monetaria", "especie"], index=0 if donacion.tipo == "monetaria" else 1, key="edit_donante_tipo")
-                    monto = st.number_input("Monto", min_value=0.0, step=0.01, value=float(donacion.monto) if donacion.monto else 0.0, key="edit_donante_monto") if tipo == "monetaria" else None
-                    descripcion_especie = st.text_input("Descripción Especie", value=donacion.descripcion_especie or "", key="edit_donante_desc_especie") if tipo == "especie" else None
-                    fecha = st.date_input("Fecha", value=donacion.fecha.date() if donacion.fecha else today, key="edit_donante_fecha")
-                    submitted_update = st.form_submit_button("Actualizar")
-                    submitted_delete = st.form_submit_button("Eliminar")
-                    if submitted_update:
-                        try:
-                            data = {
-                                "donante_id": donante_id,
-                                "campana_id": campana_id,
-                                "tipo": tipo,
-                                "monto": monto if tipo == "monetaria" else None,
-                                "descripcion_especie": descripcion_especie if tipo == "especie" else None,
-                                "fecha": fecha
-                            }
-                            update_donacion(db, donacion_id, data)
-                            st.success("Donación actualizada!")
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-                    if submitted_delete:
-                        try:
-                            if delete_donacion(db, donacion_id):
-                                st.success("Donación eliminada!")
-                            else:
-                                st.error("Error al eliminar")
-                        except Exception as e:
-                            st.error(f"Error: {e}")
     # CRUD Donantes (opcional, si existe CRUD de donante)
     if donante_crud:
         st.subheader("CRUD Donantes")
@@ -682,6 +611,7 @@ def distribucion_voluntarios_por_edad():
     import datetime
     import streamlit as st
     import pandas as pd
+    import plotly.express as px
     from components.ui_elements import render_table, render_filters
     from db.connection import get_session
     try:
@@ -698,18 +628,14 @@ def distribucion_voluntarios_por_edad():
     # Filtros
     today = datetime.date.today()
     filters = {
-        "fecha_inicio_edad": {"type": "date", "label": "Fecha inicio", "value": today.replace(day=1).replace(year=today.year - 3)},
-        "fecha_fin_edad": {"type": "date", "label": "Fecha fin", "value": today.replace(month=today.month + 1)},
-        "genero_edad": {"type": "select", "label": "Género", "options": ["Todos", "M", "F"]},
-        "actividad_id_edad": {"type": "number", "label": "ID Actividad", "value": 1, "min": 1},
+        "edad_minima_edad": {"type": "number", "label": "Edad mínima", "value": 16, "min": 0},
+        "edad_maxima_edad": {"type": "number", "label": "Edad máxima", "value": 99, "min": 0},
+        "anios_por_grupo": {"type": "number", "label": "Años por grupo", "value": 5, "min": 1}
     }
     render_filters(filters)
-    fecha_inicio = st.session_state.get("fecha_inicio_edad")
-    fecha_fin = st.session_state.get("fecha_fin_edad")
-    genero = st.session_state.get("genero_edad")
-    actividad_id = st.session_state.get("actividad_id_edad")
-    if genero == "Todos":
-        genero = None
+    edad_minima = int(st.session_state.get("edad_minima_edad") or 16)
+    edad_maxima = int(st.session_state.get("edad_maxima_edad") or 99)
+    anios_por_grupo = int(st.session_state.get("anios_por_grupo") or 5)
 
     # Reporte (requiere función get_distribucion_voluntarios_por_edad en services.reports)
     if get_distribucion_voluntarios_por_edad:
@@ -717,10 +643,9 @@ def distribucion_voluntarios_por_edad():
             db = get_session()
             data = get_distribucion_voluntarios_por_edad(
                 db,
-                fecha_inicio=fecha_inicio,
-                fecha_fin=fecha_fin,
-                genero=genero,
-                actividad_id=actividad_id
+                edad_minima=edad_minima,
+                edad_maxima=edad_maxima,
+                anios_por_grupo=anios_por_grupo
             )
         except Exception:
             data = []
@@ -730,10 +655,9 @@ def distribucion_voluntarios_por_edad():
 
     # Gráfica
     if data:
-        import plotly.express as px
         df = pd.DataFrame(data)
-        if 'grupo_edad' in df.columns and 'total_voluntarios' in df.columns:
-            fig = px.bar(df, x='grupo_edad', y='total_voluntarios', title='Distribución de Voluntarios por Edad', labels={'grupo_edad': 'Grupo de Edad', 'total_voluntarios': 'Total Voluntarios'})
+        if 'grupo_edad' in df.columns and 'num_voluntarios' in df.columns:
+            fig = px.bar(df, x='grupo_edad', y='num_voluntarios', title='Distribución de Voluntarios por Edad', labels={'grupo_edad': 'Grupo de Edad', 'num_voluntarios': 'Total Voluntarios'})
             st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("CRUD Voluntarios")
@@ -789,6 +713,7 @@ def distribucion_voluntarios_por_edad():
                                 st.error("Error al eliminar")
                         except Exception as e:
                             st.error(f"Error: {e}")
+
 def efectividad_campanas():
     import datetime
     import streamlit as st
@@ -943,10 +868,10 @@ def efectividad_campanas():
 def main():
     st.set_page_config(page_title="ONG ORM", layout="wide")
     #organizacion_crud()
-    resumen_donaciones_por_campana()
+    #resumen_donaciones_por_campana()
     #participacion_voluntarios_por_actividad()
-    #donaciones_por_donante()
-    #distribucion_voluntarios_por_edad()
+    donaciones_por_donante()
+    distribucion_voluntarios_por_edad()
     #efectividad_campanas()
 
 if __name__ == "__main__":
