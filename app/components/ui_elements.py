@@ -78,10 +78,12 @@ def render_table(title: str, data: list[dict]):
 
     format_columns = {k: v for k, v in format_dict.items() if k in df.columns}
 
+    # Configurar el estilo de la tabla para tamaño fijo y scroll
     st.dataframe(
         df.style.format(format_columns),
         use_container_width=True,
-        height=min(35 * len(df) + 3, 500)
+        height=400,  # Altura fija para todas las tablas
+        width=800  # Ancho fijo para todas las tablas
     )
 
     
