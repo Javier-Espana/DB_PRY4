@@ -111,7 +111,13 @@ def resumen_donaciones_por_campana():
     tab1, tab2, tab3 = st.tabs(["Ver Donaciones", "Crear Donación", "Editar/Eliminar Donación"])
     with tab1:
         donaciones = get_donaciones(db)
-        df = pd.DataFrame([{k: getattr(d, k) for k in d.__table__.columns.keys()} for d in donaciones])
+        df = pd.DataFrame([
+            {
+                k: getattr(d, k).value if hasattr(getattr(d, k), "value") else getattr(d, k)
+                for k in d.__table__.columns.keys()
+            }
+            for d in donaciones
+        ])
         st.dataframe(df, height=400)
     with tab2:
         with st.form("crear_donacion"):
@@ -177,7 +183,13 @@ def resumen_donaciones_por_campana():
     tabc1, tabc2, tabc3 = st.tabs(["Ver Campañas", "Crear Campaña", "Editar/Eliminar Campaña"])
     with tabc1:
         campanas = get_campanas(db)
-        df = pd.DataFrame([{k: getattr(c, k) for k in c.__table__.columns.keys()} for c in campanas])
+        df = pd.DataFrame([
+            {
+                k: getattr(c, k).value if hasattr(getattr(c, k), "value") else getattr(c, k)
+                for k in c.__table__.columns.keys()
+            }
+            for c in campanas
+        ])
         st.dataframe(df, height=400)
     with tabc2:
         with st.form("crear_campana"):
@@ -393,7 +405,13 @@ def donaciones_por_donante():
     tab1, tab2, tab3 = st.tabs(["Ver Donaciones", "Crear Donación", "Editar/Eliminar Donación"])
     with tab1:
         donaciones = get_donaciones(db)
-        df = pd.DataFrame([{k: getattr(d, k) for k in d.__table__.columns.keys()} for d in donaciones])
+        df = pd.DataFrame([
+            {
+                k: getattr(d, k).value if hasattr(getattr(d, k), "value") else getattr(d, k)
+                for k in d.__table__.columns.keys()
+            }
+            for d in donaciones
+        ])
         st.dataframe(df, height=400)
     with tab2:
         with st.form("crear_donacion_donante"):
@@ -459,7 +477,14 @@ def donaciones_por_donante():
         tabd1, tabd2, tabd3 = st.tabs(["Ver Donantes", "Crear Donante", "Editar/Eliminar Donante"])
         with tabd1:
             donantes = get_donantes(db)
-            st.table([{k: str(getattr(d, k)) for k in d.__table__.columns.keys()} for d in donantes])
+            df = pd.DataFrame([
+                {
+                    k: getattr(d, k).value if hasattr(getattr(d, k), "value") else getattr(d, k)
+                    for k in d.__table__.columns.keys()
+                }
+                for d in donantes
+            ])
+            st.dataframe(df, height=400)
         with tabd2:
             with st.form("crear_donante"):
                 nombre = st.text_input("Nombre", key="crear_donante_nombre")
@@ -499,6 +524,7 @@ def donaciones_por_donante():
                                 st.error("Error al eliminar")
                         except Exception as e:
                             st.error(f"Error: {e}")
+
 def distribucion_voluntarios_por_edad():
     import datetime
     import streamlit as st
@@ -561,7 +587,13 @@ def distribucion_voluntarios_por_edad():
         tab1, tab2, tab3 = st.tabs(["Ver Voluntarios", "Crear Voluntario", "Editar/Eliminar Voluntario"])
         with tab1:
             voluntarios = get_voluntarios(db)
-            df = pd.DataFrame([{k: getattr(v, k) for k in v.__table__.columns.keys()} for v in voluntarios])
+            df = pd.DataFrame([
+                {
+                    k: getattr(v, k).value if hasattr(getattr(v, k), "value") else getattr(v, k)
+                    for k in v.__table__.columns.keys()
+                }
+                for v in voluntarios
+            ])
             st.dataframe(df, height=400)
         with tab2:
             with st.form("crear_voluntario"):
@@ -667,7 +699,13 @@ def efectividad_campanas():
         tab1, tab2, tab3 = st.tabs(["Ver Campañas", "Crear Campaña", "Editar/Eliminar Campaña"])
         with tab1:
             campanas = get_campanas(db)
-            df = pd.DataFrame([{k: getattr(c, k) for k in c.__table__.columns.keys()} for c in campanas])
+            df = pd.DataFrame([
+                {
+                    k: getattr(c, k).value if hasattr(getattr(c, k), "value") else getattr(c, k)
+                    for k in c.__table__.columns.keys()
+                }
+                for c in campanas
+            ])
             st.dataframe(df, height=400)
         with tab2:
             with st.form("crear_campana_efectividad"):
