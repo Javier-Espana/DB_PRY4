@@ -19,6 +19,9 @@ def update_campana(db: Session, campana_id: int, data: dict):
     campana = get_campana(db, campana_id)
     if not campana:
         return None
+    # Validate that organizacion_id is not None
+    if "organizacion_id" in data and data["organizacion_id"] is None:
+        raise ValueError("El campo 'organizacion_id' no puede ser nulo.")
     for key, value in data.items():
         setattr(campana, key, value)
     db.commit()
