@@ -724,11 +724,6 @@ def efectividad_campanas():
         from services.reports import get_efectividad_campanas
     except ImportError:
         get_efectividad_campanas = None
-    try:
-        from services.crud_campana import get_campanas, create_campana, update_campana, delete_campana, get_campana
-        campana_crud = True
-    except ImportError:
-        campana_crud = False
     st.header("Efectividad de Campañas")
 
     # Filtros
@@ -755,6 +750,9 @@ def efectividad_campanas():
                 fecha_fin=fecha_fin,
                 estado=estado
             )
+            for row in data:
+                if "estado" in row and hasattr(row["estado"], "value"):
+                    row["estado"] = row["estado"].value
         except Exception:
             data = []
     else:
@@ -770,109 +768,26 @@ def efectividad_campanas():
             top = df.sort_values('porcentaje_cumplimiento', ascending=False).head(10)
             fig1 = px.bar(top, x='nombre', y='porcentaje_cumplimiento', title='Campañas más efectivas', labels={'nombre': 'Campaña', 'porcentaje_cumplimiento': 'Porcentaje Cumplimiento'})
             st.plotly_chart(fig1, use_container_width=True)
-        # Gráfica 2: Recaudación por campaña
+        # Gráfica 2: Recaudación por campaña (solo top 10)
         if 'nombre' in df.columns and 'monto_recaudado' in df.columns:
-            fig2 = px.bar(df, x='nombre', y='monto_recaudado', title='Recaudación por Campaña', labels={'nombre': 'Campaña', 'monto_recaudado': 'Monto Recaudado'})
+            top_recaudacion = df.sort_values('monto_recaudado', ascending=False).head(10)
+            fig2 = px.bar(
+                top_recaudacion,
+                x='nombre',
+                y='monto_recaudado',
+                title='Top 10 Campañas por Recaudación',
+                labels={'nombre': 'Campaña', 'monto_recaudado': 'Monto Recaudado'}
+            )
             st.plotly_chart(fig2, use_container_width=True)
 
-    st.subheader("CRUD Campañas")
-    db = get_session()
-    if campana_crud:
-        tab1, tab2, tab3 = st.tabs(["Ver Campañas", "Crear Campaña", "Editar/Eliminar Campaña"])
-        with tab1:
-            campanas = get_campanas(db)
-            df = pd.DataFrame([
-                {
-                    k: getattr(c, k).value if hasattr(getattr(c, k), "value") else getattr(c, k)
-                    for k in c.__table__.columns.keys()
-                }
-                for c in campanas
-            ])
-            st.dataframe(df, height=400)
-        with tab2:
-            with st.form("crear_campana_efectividad"):
-                nombre = st.text_input("Nombre", key="efectividad_crear_campana_nombre")
-                descripcion = st.text_area("Descripción", key="efectividad_crear_campana_desc")
-                fecha_inicio = st.date_input("Fecha inicio", value=today, key="efectividad_crear_campana_fecha_inicio")
-                fecha_fin = st.date_input("Fecha fin", value=today, key="efectividad_crear_campana_fecha_fin")
-                meta_monetaria = st.number_input("Meta monetaria", min_value=0.0, step=0.01, key="efectividad_crear_campana_meta")
-                estado = st.selectbox("Estado", ["planificada", "activa", "pausada", "finalizada"], key="efectividad_crear_campana_estado")
-                organizacion_id = st.number_input("Organización ID", min_value=1, key="efectividad_crear_campana_org_id")
-                categoria_id = st.number_input("Categoría ID", min_value=1, key="efectividad_crear_campana_cat_id")
-                sede_principal_id = st.number_input("Sede Principal ID", min_value=1, key="efectividad_crear_campana_sede_id")
-                if st.form_submit_button("Crear"):
-                    try:
-                        data = {
-                            "nombre": nombre,
-                            "descripcion": descripcion,
-                            "fecha_inicio": fecha_inicio,
-                            "fecha_fin": fecha_fin,
-                            "meta_monetaria": meta_monetaria,
-                            "estado": estado,
-                            "organizacion_id": organizacion_id,
-                            "categoria_id": categoria_id,
-                            "sede_principal_id": sede_principal_id
-                        }
-                        create_campana(db, data)
-                        st.success("Campaña creada!")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-        with tab3:
-            campana_id = st.number_input("ID Campaña", min_value=1, key="efectividad_edit_campana_id")
-            campana = get_campana(db, campana_id)
-            if campana:
-                with st.form("editar_campana_efectividad"):
-                    nombre = st.text_input("Nombre", value=campana.nombre, key="efectividad_edit_campana_nombre")
-                    descripcion = st.text_area("Descripción", value=campana.descripcion or "", key="efectividad_edit_campana_desc")
-                    fecha_inicio = st.date_input("Fecha inicio", value=campana.fecha_inicio or today, key="efectividad_edit_campana_fecha_inicio")
-                    fecha_fin = st.date_input("Fecha fin", value=campana.fecha_fin or today, key="efectividad_edit_campana_fecha_fin")
-                    meta_monetaria = st.number_input("Meta monetaria", min_value=0.0, step=0.01, value=float(campana.meta_monetaria) if campana.meta_monetaria else 0.0, key="efectividad_edit_campana_meta")
-                    # CORRECCIÓN: Convertir Enum a string para el índice
-                    estado_list = ["planificada", "activa", "pausada", "finalizada"]
-                    estado_value = campana.estado.value if hasattr(campana.estado, 'value') else str(campana.estado) if campana.estado else None
-                    estado = st.selectbox("Estado", estado_list, index=estado_list.index(estado_value) if estado_value in estado_list else 0)
-                    organizacion_id = st.number_input("Organización ID", min_value=1, value=campana.organizacion_id, key="efectividad_edit_campana_org_id")
-                    categoria_id = st.number_input("Categoría ID", min_value=1, value=campana.categoria_id, key="efectividad_edit_campana_cat_id")
-                    sede_principal_id = st.number_input("Sede Principal ID", min_value=1, value=campana.sede_principal_id, key="efectividad_edit_campana_sede_id")
-                    submitted_update = st.form_submit_button("Actualizar")
-                    submitted_delete = st.form_submit_button("Eliminar")
-                    if submitted_update:
-                        try:
-                            data = {
-                                "nombre": nombre,
-                                "descripcion": descripcion,
-                                "fecha_inicio": fecha_inicio,
-                                "fecha_fin": fecha_fin,
-                                "meta_monetaria": meta_monetaria,
-                                "estado": estado,
-                                "organizacion_id": organizacion_id,
-                                "categoria_id": categoria_id,
-                                "sede_principal_id": sede_principal_id
-                            }
-                            update_campana(db, campana_id, data)
-                            st.success("Campaña actualizada!")
-                        except ValueError as ve:
-                            st.error(f"Error: {str(ve)}")
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-                    if submitted_delete:
-                        try:
-                            if delete_campana(db, campana_id):
-                                st.success("Campaña eliminada!")
-                            else:
-                                st.error("No se encontró la campaña para eliminar.")
-                        except ValueError as ve:
-                            st.error(f"Error al eliminar campaña: {str(ve)}")
-                        except Exception as e:
-                            st.error(f"Error inesperado: {str(e)}")
 def main():
     st.set_page_config(page_title="ONG ORM", layout="wide")
     #organizacion_crud()
     #resumen_donaciones_por_campana()
     #participacion_voluntarios_por_actividad()
-    donaciones_por_donante()
-    distribucion_voluntarios_por_edad()
-    #efectividad_campanas()
+    #donaciones_por_donante()
+    #distribucion_voluntarios_por_edad()
+    efectividad_campanas()
 
 if __name__ == "__main__":
     main()
